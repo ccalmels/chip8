@@ -1,0 +1,32 @@
+* Chip-8 interpreter
+** Design
+*** Memory
+Originaly 4K, 512 first bytes are used for the interpreter.
+Last 256 bytes are used for display refresh. The 96 bytes below were used for call stack.
+| start |   end | size | usage       |
+|-------+-------+------+-------------|
+| 0x000 | 0x1FF |  512 | intepreter  |
+| 0x200 | 0xE9F | 3232 |             |
+| 0xEA0 | 0xEFF |   96 | stack       |
+| 0xF00 | 0xFFF |  256 | framebuffer |
+*** Registers
+- PC program counter
+- 16 8-bit data registers V0-VF. VF acts as a flag register.
+- address register I, 12 bits.
+*** Timers
+Two decreasing timers at 60Hz.
+- delay: for event
+- sound: for sound effect
+*** Input
+Hex keyboard with 16 keys from 0 to F.
+8, 4, 6, 2 keys are used for directions.
+*** GFX
+Original display resolution is 64x32 pixels. The Chip-8 only draw 8b wide sprite with height from 0 to 15. They are XORed with the corresponding screen pixels.
+*** CPU
+Not a real CPU. Opcodes are clocked at 500Hz.
+** Resources
+- https://en.wikipedia.org/wiki/CHIP-8
+- https://beyondloom.com/blog/artofchip8.html
+- https://github.com/Timendus/chip8-test-suite
+- http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#0.1
+- https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#specifications
