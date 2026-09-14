@@ -38,27 +38,31 @@ impl Chip8 {
     }
 }
 
+const ORANGE: [u8; 4] = [0xff, 0x95, 0x0, 0xff];
+const WHITE: [u8; 4] = [0xff; 4];
+
+fn pixel_color(framebuffer: &[u8], i: usize) -> [u8; 4] {
+    let bit = 7 - i % 8;
+    let index = i / 8;
+    let line = framebuffer[index];
+
+    if (line & (1 << bit)) != 0 {
+        ORANGE
+    } else {
+        WHITE
+    }
+}
+
 impl Renderable for Chip8 {
     const WIDTH: u32 = WIDTH as u32;
     const HEIGHT: u32 = HEIGHT as u32;
 
     fn render(&self, pixels: &mut Pixels<'_>) {
         for (i, pixel) in pixels.frame_mut().chunks_exact_mut(4).enumerate() {
-            let bit = 7 - i % 8;
-            let index = i / 8;
-            let line = self.framebuffer()[index];
-
-            if (line & (1 << bit)) != 0 {
-                pixel[0] = 0xff;
-                pixel[1] = 0x95;
-                pixel[2] = 0x0;
-                pixel[3] = 0xff;
-            } else {
-                pixel[0] = 0xff;
-                pixel[1] = 0xff;
-                pixel[2] = 0xff;
-                pixel[3] = 0xff;
-            }
+            pixel.copy_from_slice(&pixel_color(
+                self.framebuffer(),
+                i,
+            ));
         }
     }
 }
@@ -66,5 +70,25 @@ impl Renderable for Chip8 {
 impl Updatable for Chip8 {
     fn update(&mut self) {
         self.cpu.step(&mut self.peripheral).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod pixel_color_tests {
+    use super::*;
+
+    #[test]
+    fn pixel_color_is_fill() {
+        let mut fb = [0; 256];
+
+        fb[0] = 0b10000000;
+        fb[1] = 0b00001000;
+
+        assert_eq!(pixel_color(&fb, 0), ORANGE);
+        assert_eq!(pixel_color(&fb, 12), ORANGE);
+
+        for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15] {
+            assert_eq!(pixel_color(&fb, i), WHITE, "pixel {i} should be white");
+        }
     }
 }
