@@ -162,6 +162,12 @@ mod decode_tests {
     }
 
     #[test]
+    fn decode_jump() {
+        assert_eq!(decode(0x1123), Ok(OpCode::Jump(Address::new(0x123))));
+        assert_eq!(decode(0x1fed), Ok(OpCode::Jump(Address::new(0xfed))));
+    }
+
+    #[test]
     fn decode_load() {
         assert_eq!(decode(0x6123), Ok(OpCode::Load(0x1, 0x23)));
         assert_eq!(decode(0x6fed), Ok(OpCode::Load(0xf, 0xed)));
