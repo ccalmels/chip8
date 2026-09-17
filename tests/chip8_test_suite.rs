@@ -37,3 +37,12 @@ fn corax_plus() {
         306, // this number was found by dichotomy
     );
 }
+
+#[test]
+fn flags() {
+    assert_rom_matches_expected(
+        include_bytes!("fixtures/4-flags.ch8"),
+        include_bytes!("fixtures/4-flags.expected"),
+        952, // this number was found by dichotomy
+    );
+}
