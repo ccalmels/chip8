@@ -19,3 +19,12 @@ fn chip8_logo() {
         39, // this number comes from Timendus CHIP-8 splash screen description
     );
 }
+
+#[test]
+fn ibm_logo() {
+    assert_rom_matches_expected(
+        include_bytes!("fixtures/2-ibm-logo.ch8"),
+        include_bytes!("fixtures/2-ibm-logo.expected"),
+        20, // this number comes from Timendus IBM splash screen description
+    );
+}

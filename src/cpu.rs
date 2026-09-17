@@ -120,6 +120,7 @@ enum OpCode {
     Clear,
     Jump(Address),
     Load(u8, u8),
+    Add(u8, u8),
     LoadIndex(Address),
     Draw(u8, u8, u8),
 }
@@ -138,6 +139,7 @@ fn decode(opcode: u16) -> Result<OpCode, Error> {
         (0x0, 0x0, 0xe, 0x0) => Ok(OpCode::Clear),
         (0x1, _, _, _) => Ok(OpCode::Jump(Address::new(nnn))),
         (0x6, x, _, _) => Ok(OpCode::Load(x, nn)),
+        (0x7, x, _, _) => Ok(OpCode::Add(x, nn)),
         (0xa, _, _, _) => Ok(OpCode::LoadIndex(Address::new(nnn))),
         (0xd, x, y, n) => Ok(OpCode::Draw(x, y, n)),
         _ => Err(Error::UnknownOpCode(opcode)),
@@ -163,6 +165,12 @@ mod decode_tests {
     fn decode_load() {
         assert_eq!(decode(0x6123), Ok(OpCode::Load(0x1, 0x23)));
         assert_eq!(decode(0x6fed), Ok(OpCode::Load(0xf, 0xed)));
+    }
+
+    #[test]
+    fn decode_add() {
+        assert_eq!(decode(0x7123), Ok(OpCode::Add(0x1, 0x23)));
+        assert_eq!(decode(0x7fed), Ok(OpCode::Add(0xf, 0xed)));
     }
 
     #[test]
@@ -237,6 +245,7 @@ impl Cpu {
             OpCode::Clear => peripherals.clear(),
             OpCode::Jump(address) => self.pc = address,
             OpCode::Load(v, value) => self.vs[v] = value,
+            OpCode::Add(v, value) => self.vs[v] += value,
             OpCode::LoadIndex(addr) => self.i = addr,
             OpCode::Draw(x, y, n) => {
                 let mut sprite = [0u8; 15];
