@@ -65,8 +65,10 @@ impl Renderable for Chip8 {
 }
 
 impl Updatable for Chip8 {
-    fn update(&mut self) {
-        self.cpu.step(&mut self.peripheral).unwrap();
+    type Error = crate::Error;
+
+    fn update(&mut self) -> Result<(), crate::Error> {
+        self.cpu.step(&mut self.peripheral)
     }
 }
 

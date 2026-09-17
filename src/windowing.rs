@@ -14,13 +14,15 @@ pub trait Renderable {
 }
 
 pub trait Updatable {
-    fn update(&mut self);
+    type Error;
+    fn update(&mut self) -> Result<(), Self::Error>;
 }
 
 pub struct App<E: Renderable + Updatable> {
     window: Option<Arc<Window>>,
     pixels: Option<Pixels<'static>>,
     engine: E,
+    pub engine_error: Option<E::Error>,
 }
 
 impl<E: Renderable + Updatable> App<E> {
@@ -29,6 +31,7 @@ impl<E: Renderable + Updatable> App<E> {
             window: None,
             pixels: None,
             engine,
+            engine_error: None,
         }
     }
 
@@ -73,7 +76,14 @@ impl<E: Renderable + Updatable> ApplicationHandler for App<E> {
             }
             WindowEvent::RedrawRequested => {
                 if let (Some(pixels), Some(window)) = (&mut self.pixels, &self.window) {
-                    self.engine.update();
+                    let rc = self.engine.update();
+
+                    if let Err(error) = rc {
+                        self.engine_error = Some(error);
+                        event_loop.exit();
+                        return;
+                    }
+
                     self.engine.render(pixels);
 
                     pixels.render().unwrap();

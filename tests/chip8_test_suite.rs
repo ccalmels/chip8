@@ -5,7 +5,7 @@ fn assert_rom_matches_expected(rom: &[u8], expected: &[u8], steps: usize) {
     let mut chip8 = Chip8::from_rom(rom).unwrap();
 
     for _ in 0..steps {
-        chip8.update();
+        chip8.update().unwrap();
     }
 
     assert_eq!(chip8.framebuffer(), expected);
