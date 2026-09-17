@@ -424,18 +424,18 @@ impl Cpu {
         Address::new((high as u16) << 8 | low as u16)
     }
 
-    pub fn step<P: Memory + Display>(&mut self, peripherals: &mut P) -> Result<(), crate::Error> {
-        let opcode = fetch(peripherals, self.pc);
+    pub fn step<P: Memory + Display>(&mut self, peripheral: &mut P) -> Result<(), crate::Error> {
+        let opcode = fetch(peripheral, self.pc);
         let opcode = decode(opcode)?;
 
         self.pc = self.pc.wrapping_add(2);
 
         match opcode {
-            OpCode::Clear => peripherals.clear(),
-            OpCode::Return => self.pc = self.pop(peripherals),
+            OpCode::Clear => peripheral.clear(),
+            OpCode::Return => self.pc = self.pop(peripheral),
             OpCode::Jump(address) => self.pc = address,
             OpCode::Call(address) => {
-                self.push(peripherals, self.pc);
+                self.push(peripheral, self.pc);
                 self.pc = address
             }
             OpCode::SkipEqual(v, value) => {
@@ -494,11 +494,10 @@ impl Cpu {
                 let mut sprite = [0u8; 15];
 
                 for (row, byte) in sprite.iter_mut().enumerate().take(n as usize) {
-                    *byte = peripherals.read(self.i.wrapping_add(row as u16));
+                    *byte = peripheral.read(self.i.wrapping_add(row as u16));
                 }
 
-                self.vs[0xf] =
-                    peripherals.draw(self.vs[x], self.vs[y], &sprite[..n as usize]) as u8;
+                self.vs[0xf] = peripheral.draw(self.vs[x], self.vs[y], &sprite[..n as usize]) as u8;
             }
             OpCode::Increase(x) => self.i = self.i.wrapping_add(self.vs[x] as u16),
             OpCode::Bcd(x) => {
@@ -507,21 +506,21 @@ impl Cpu {
                 let c = self.vs[x] % 10;
                 let mut destination = self.i;
 
-                peripherals.write(destination, a);
+                peripheral.write(destination, a);
                 destination = destination.wrapping_add(1);
-                peripherals.write(destination, b);
+                peripheral.write(destination, b);
                 destination = destination.wrapping_add(1);
-                peripherals.write(destination, c);
+                peripheral.write(destination, c);
             }
             OpCode::Write(x) => {
                 for i in 0..=x {
-                    peripherals.write(self.i, self.vs[i]);
+                    peripheral.write(self.i, self.vs[i]);
                     self.i = self.i.wrapping_add(1);
                 }
             }
             OpCode::Read(x) => {
                 for i in 0..=x {
-                    self.vs[i] = peripherals.read(self.i);
+                    self.vs[i] = peripheral.read(self.i);
                     self.i = self.i.wrapping_add(1);
                 }
             }
