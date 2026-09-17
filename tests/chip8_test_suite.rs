@@ -28,3 +28,12 @@ fn ibm_logo() {
         20, // this number comes from Timendus IBM splash screen description
     );
 }
+
+#[test]
+fn corax_plus() {
+    assert_rom_matches_expected(
+        include_bytes!("fixtures/3-corax+.ch8"),
+        include_bytes!("fixtures/3-corax+.expected"),
+        306, // this number was found by dichotomy
+    );
+}

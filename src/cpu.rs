@@ -17,6 +17,10 @@ impl Address {
     pub fn wrapping_add(self, offset: u16) -> Self {
         Address::new(self.0.wrapping_add(offset))
     }
+
+    pub fn wrapping_sub(self, offset: u16) -> Self {
+        Address::new(self.0.wrapping_sub(offset))
+    }
 }
 
 #[cfg(test)]
@@ -46,6 +50,23 @@ mod address_tests {
         assert_eq!(Address::new(0x001).wrapping_add(0xfff).value(), 0x000);
         assert_eq!(Address::new(0x002).wrapping_add(0xfff).value(), 0x001);
         assert_eq!(Address::new(0xfff).wrapping_add(0xfff).value(), 0xffe);
+    }
+
+    #[test]
+    fn wrapping_sub_at_min() {
+        assert_eq!(Address::new(0x0).wrapping_sub(1).value(), 0xfff);
+    }
+
+    #[test]
+    fn wrapping_sub_after_wrap() {
+        assert_eq!(Address::new(0x0).wrapping_sub(2).value(), 0xffe);
+    }
+
+    #[test]
+    fn wrapping_sub_larg_offset() {
+        assert_eq!(Address::new(0xfff).wrapping_sub(0xfff).value(), 0x0);
+        assert_eq!(Address::new(0xffe).wrapping_sub(0xfff).value(), 0xfff);
+        assert_eq!(Address::new(0x0).wrapping_sub(0xfff).value(), 0x1);
     }
 }
 
@@ -118,11 +139,30 @@ pub trait Display {
 #[derive(PartialEq, Debug)]
 enum OpCode {
     Clear,
+    Return,
     Jump(Address),
+    Call(Address),
+    SkipEqual(u8, u8),
+    SkipNotEqual(u8, u8),
+    SkipRegistersEqual(u8, u8),
     Load(u8, u8),
+    Inc(u8, u8),
+    Set(u8, u8),
+    Or(u8, u8),
+    And(u8, u8),
+    Xor(u8, u8),
     Add(u8, u8),
+    Sub(u8, u8),
+    RShift(u8),
+    InvSub(u8, u8),
+    LShift(u8),
+    SkipRegistersNotEqual(u8, u8),
     LoadIndex(Address),
     Draw(u8, u8, u8),
+    Increase(u8),
+    Bcd(u8),
+    Write(u8),
+    Read(u8),
 }
 
 fn decode(opcode: u16) -> Result<OpCode, Error> {
@@ -137,11 +177,30 @@ fn decode(opcode: u16) -> Result<OpCode, Error> {
 
     match nibbles {
         (0x0, 0x0, 0xe, 0x0) => Ok(OpCode::Clear),
+        (0x0, 0x0, 0xe, 0xe) => Ok(OpCode::Return),
         (0x1, _, _, _) => Ok(OpCode::Jump(Address::new(nnn))),
+        (0x2, _, _, _) => Ok(OpCode::Call(Address::new(nnn))),
+        (0x3, x, _, _) => Ok(OpCode::SkipEqual(x, nn)),
+        (0x4, x, _, _) => Ok(OpCode::SkipNotEqual(x, nn)),
+        (0x5, x, y, 0) => Ok(OpCode::SkipRegistersEqual(x, y)),
         (0x6, x, _, _) => Ok(OpCode::Load(x, nn)),
-        (0x7, x, _, _) => Ok(OpCode::Add(x, nn)),
+        (0x7, x, _, _) => Ok(OpCode::Inc(x, nn)),
+        (0x8, x, y, 0) => Ok(OpCode::Set(x, y)),
+        (0x8, x, y, 1) => Ok(OpCode::Or(x, y)),
+        (0x8, x, y, 2) => Ok(OpCode::And(x, y)),
+        (0x8, x, y, 3) => Ok(OpCode::Xor(x, y)),
+        (0x8, x, y, 4) => Ok(OpCode::Add(x, y)),
+        (0x8, x, y, 5) => Ok(OpCode::Sub(x, y)),
+        (0x8, x, _, 6) => Ok(OpCode::RShift(x)),
+        (0x8, x, y, 7) => Ok(OpCode::InvSub(x, y)),
+        (0x8, x, _, 0xe) => Ok(OpCode::LShift(x)),
+        (0x9, x, y, 0) => Ok(OpCode::SkipRegistersNotEqual(x, y)),
         (0xa, _, _, _) => Ok(OpCode::LoadIndex(Address::new(nnn))),
         (0xd, x, y, n) => Ok(OpCode::Draw(x, y, n)),
+        (0xf, x, 1, 0xe) => Ok(OpCode::Increase(x)),
+        (0xf, x, 3, 3) => Ok(OpCode::Bcd(x)),
+        (0xf, x, 5, 5) => Ok(OpCode::Write(x)),
+        (0xf, x, 6, 5) => Ok(OpCode::Read(x)),
         _ => Err(Error::UnknownOpCode(opcode)),
     }
 }
@@ -168,15 +227,92 @@ mod decode_tests {
     }
 
     #[test]
+    fn decode_call() {
+        assert_eq!(decode(0x2123), Ok(OpCode::Call(Address::new(0x123))));
+        assert_eq!(decode(0x2fed), Ok(OpCode::Call(Address::new(0xfed))));
+    }
+    #[test]
+    fn decode_skip_equal() {
+        assert_eq!(decode(0x3123), Ok(OpCode::SkipEqual(0x1, 0x23)));
+        assert_eq!(decode(0x3fed), Ok(OpCode::SkipEqual(0xf, 0xed)));
+    }
+
+    #[test]
+    fn decode_skip_not_equal() {
+        assert_eq!(decode(0x4123), Ok(OpCode::SkipNotEqual(0x1, 0x23)));
+        assert_eq!(decode(0x4fed), Ok(OpCode::SkipNotEqual(0xf, 0xed)));
+    }
+
+    #[test]
     fn decode_load() {
         assert_eq!(decode(0x6123), Ok(OpCode::Load(0x1, 0x23)));
         assert_eq!(decode(0x6fed), Ok(OpCode::Load(0xf, 0xed)));
     }
 
     #[test]
+    fn decode_inc() {
+        assert_eq!(decode(0x7123), Ok(OpCode::Inc(0x1, 0x23)));
+        assert_eq!(decode(0x7fed), Ok(OpCode::Inc(0xf, 0xed)));
+    }
+
+    #[test]
+    fn decode_skip_registers_not_equal() {
+        assert_eq!(decode(0x9120), Ok(OpCode::SkipRegistersNotEqual(0x1, 0x2)));
+        assert_eq!(decode(0x9fe0), Ok(OpCode::SkipRegistersNotEqual(0xf, 0xe)));
+    }
+
+    #[test]
+    fn decode_set() {
+        assert_eq!(decode(0x8120), Ok(OpCode::Set(0x1, 0x2)));
+        assert_eq!(decode(0x8fe0), Ok(OpCode::Set(0xf, 0xe)));
+    }
+
+    #[test]
+    fn decode_or() {
+        assert_eq!(decode(0x8121), Ok(OpCode::Or(0x1, 0x2)));
+        assert_eq!(decode(0x8fe1), Ok(OpCode::Or(0xf, 0xe)));
+    }
+
+    #[test]
+    fn decode_and() {
+        assert_eq!(decode(0x8122), Ok(OpCode::And(0x1, 0x2)));
+        assert_eq!(decode(0x8fe2), Ok(OpCode::And(0xf, 0xe)));
+    }
+
+    #[test]
+    fn decode_xor() {
+        assert_eq!(decode(0x8123), Ok(OpCode::Xor(0x1, 0x2)));
+        assert_eq!(decode(0x8fe3), Ok(OpCode::Xor(0xf, 0xe)));
+    }
+
+    #[test]
     fn decode_add() {
-        assert_eq!(decode(0x7123), Ok(OpCode::Add(0x1, 0x23)));
-        assert_eq!(decode(0x7fed), Ok(OpCode::Add(0xf, 0xed)));
+        assert_eq!(decode(0x8124), Ok(OpCode::Add(0x1, 0x2)));
+        assert_eq!(decode(0x8fe4), Ok(OpCode::Add(0xf, 0xe)));
+    }
+
+    #[test]
+    fn decode_sub() {
+        assert_eq!(decode(0x8125), Ok(OpCode::Sub(0x1, 0x2)));
+        assert_eq!(decode(0x8fe5), Ok(OpCode::Sub(0xf, 0xe)));
+    }
+
+    #[test]
+    fn decode_rshift() {
+        assert_eq!(decode(0x8126), Ok(OpCode::RShift(0x1)));
+        assert_eq!(decode(0x8fe6), Ok(OpCode::RShift(0xf)));
+    }
+
+    #[test]
+    fn decode_inv_sub() {
+        assert_eq!(decode(0x8127), Ok(OpCode::InvSub(0x1, 0x2)));
+        assert_eq!(decode(0x8fe7), Ok(OpCode::InvSub(0xf, 0xe)));
+    }
+
+    #[test]
+    fn decode_lshift() {
+        assert_eq!(decode(0x812e), Ok(OpCode::LShift(0x1)));
+        assert_eq!(decode(0x8fee), Ok(OpCode::LShift(0xf)));
     }
 
     #[test]
@@ -189,6 +325,30 @@ mod decode_tests {
     fn decode_draw() {
         assert_eq!(decode(0xd123), Ok(OpCode::Draw(0x1, 0x2, 0x3)));
         assert_eq!(decode(0xdfed), Ok(OpCode::Draw(0xf, 0xe, 0xd)));
+    }
+
+    #[test]
+    fn decode_increase() {
+        assert_eq!(decode(0xf31e), Ok(OpCode::Increase(0x3)));
+        assert_eq!(decode(0xf51e), Ok(OpCode::Increase(0x5)));
+    }
+
+    #[test]
+    fn decode_bcd() {
+        assert_eq!(decode(0xf333), Ok(OpCode::Bcd(0x3)));
+        assert_eq!(decode(0xf533), Ok(OpCode::Bcd(0x5)));
+    }
+
+    #[test]
+    fn decode_write() {
+        assert_eq!(decode(0xf355), Ok(OpCode::Write(0x3)));
+        assert_eq!(decode(0xf555), Ok(OpCode::Write(0x5)));
+    }
+
+    #[test]
+    fn decode_read() {
+        assert_eq!(decode(0xf365), Ok(OpCode::Read(0x3)));
+        assert_eq!(decode(0xf565), Ok(OpCode::Read(0x5)));
     }
 }
 
@@ -226,19 +386,42 @@ mod fetch_tests {
 
 pub struct Cpu {
     pc: Address,
+    sp: Address,
     i: Address,
     vs: Registers,
 }
 
 impl Cpu {
     pub const START_PC: Address = Address::new(0x200);
+    const SP: Address = Address::new(0xeff);
 
     pub fn new() -> Self {
         Cpu {
             pc: Cpu::START_PC,
+            sp: Cpu::SP,
             i: Address::new(0),
             vs: Registers([0; 16]),
         }
+    }
+
+    fn push<M: Memory>(&mut self, memory: &mut M, address: Address) {
+        let (high, low) = ((address.value() >> 8) as u8, (address.value() & 0xff) as u8);
+
+        memory.write(self.sp, high);
+        self.sp = self.sp.wrapping_sub(1);
+
+        memory.write(self.sp, low);
+        self.sp = self.sp.wrapping_sub(1);
+    }
+
+    fn pop<M: Memory>(&mut self, memory: &M) -> Address {
+        self.sp = self.sp.wrapping_add(1);
+        let low = memory.read(self.sp);
+
+        self.sp = self.sp.wrapping_add(1);
+        let high = memory.read(self.sp);
+
+        Address::new((high as u16) << 8 | low as u16)
     }
 
     pub fn step<P: Memory + Display>(&mut self, peripherals: &mut P) -> Result<(), crate::Error> {
@@ -249,9 +432,63 @@ impl Cpu {
 
         match opcode {
             OpCode::Clear => peripherals.clear(),
+            OpCode::Return => self.pc = self.pop(peripherals),
             OpCode::Jump(address) => self.pc = address,
+            OpCode::Call(address) => {
+                self.push(peripherals, self.pc);
+                self.pc = address
+            }
+            OpCode::SkipEqual(v, value) => {
+                if self.vs[v] == value {
+                    self.pc = self.pc.wrapping_add(2)
+                }
+            }
+            OpCode::SkipNotEqual(v, value) => {
+                if self.vs[v] != value {
+                    self.pc = self.pc.wrapping_add(2)
+                }
+            }
+            OpCode::SkipRegistersEqual(x, y) => {
+                if self.vs[x] == self.vs[y] {
+                    self.pc = self.pc.wrapping_add(2)
+                }
+            }
             OpCode::Load(v, value) => self.vs[v] = value,
-            OpCode::Add(v, value) => self.vs[v] = self.vs[v].wrapping_add(value),
+            OpCode::Inc(v, value) => self.vs[v] = self.vs[v].wrapping_add(value),
+            OpCode::Set(x, y) => self.vs[x] = self.vs[y],
+            OpCode::Or(x, y) => self.vs[x] |= self.vs[y],
+            OpCode::And(x, y) => self.vs[x] &= self.vs[y],
+            OpCode::Xor(x, y) => self.vs[x] ^= self.vs[y],
+            OpCode::Add(x, y) => {
+                let (res, overflowed) = self.vs[x].overflowing_add(self.vs[y]);
+                self.vs[x] = res;
+                self.vs[0xf] = overflowed as u8;
+            }
+            OpCode::Sub(x, y) => {
+                let (res, overflowed) = self.vs[x].overflowing_sub(self.vs[y]);
+                self.vs[x] = res;
+                self.vs[0xf] = !overflowed as u8;
+            }
+            OpCode::RShift(x) => {
+                let lsb = self.vs[x] & 0x1;
+                self.vs[x] >>= 1;
+                self.vs[0xf] = lsb;
+            }
+            OpCode::InvSub(x, y) => {
+                let (res, overflowed) = self.vs[y].overflowing_sub(self.vs[x]);
+                self.vs[x] = res;
+                self.vs[0xf] = !overflowed as u8;
+            }
+            OpCode::LShift(x) => {
+                let msb = self.vs[x] >> 7;
+                self.vs[x] <<= 1;
+                self.vs[0xf] = msb;
+            }
+            OpCode::SkipRegistersNotEqual(x, y) => {
+                if self.vs[x] != self.vs[y] {
+                    self.pc = self.pc.wrapping_add(2)
+                }
+            }
             OpCode::LoadIndex(addr) => self.i = addr,
             OpCode::Draw(x, y, n) => {
                 let mut sprite = [0u8; 15];
@@ -263,6 +500,31 @@ impl Cpu {
                 self.vs[0xf] =
                     peripherals.draw(self.vs[x], self.vs[y], &sprite[..n as usize]) as u8;
             }
+            OpCode::Increase(x) => self.i = self.i.wrapping_add(self.vs[x] as u16),
+            OpCode::Bcd(x) => {
+                let a = self.vs[x] / 100;
+                let b = (self.vs[x] / 10) % 10;
+                let c = self.vs[x] % 10;
+                let mut destination = self.i;
+
+                peripherals.write(destination, a);
+                destination = destination.wrapping_add(1);
+                peripherals.write(destination, b);
+                destination = destination.wrapping_add(1);
+                peripherals.write(destination, c);
+            }
+            OpCode::Write(x) => {
+                for i in 0..=x {
+                    peripherals.write(self.i, self.vs[i]);
+                    self.i = self.i.wrapping_add(1);
+                }
+            }
+            OpCode::Read(x) => {
+                for i in 0..=x {
+                    self.vs[i] = peripherals.read(self.i);
+                    self.i = self.i.wrapping_add(1);
+                }
+            }
         }
 
         Ok(())
@@ -272,5 +534,56 @@ impl Cpu {
 impl Default for Cpu {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod cpu_tests {
+    use super::*;
+
+    struct MockMemory([u8; 8]);
+
+    impl Memory for MockMemory {
+        fn read(&self, address: Address) -> u8 {
+            self.0[address.value() as usize]
+        }
+
+        fn write(&mut self, address: Address, value: u8) {
+            self.0[address.value() as usize] = value;
+        }
+    }
+
+    #[test]
+    fn push_pop_stack() {
+        let mut cpu = Cpu {
+            pc: Address::new(0x0),
+            sp: Address::new(0x7),
+            i: Address::new(0),
+            vs: Registers([0; 16]),
+        };
+        let mut memory = MockMemory([0; 8]);
+
+        let expected = [0, 0, 0, 0, 0x23, 0x1, 0xbc, 0xa];
+
+        cpu.push(&mut memory, Address::new(0xabc));
+        assert_eq!(cpu.sp, Address::new(5));
+        cpu.push(&mut memory, Address::new(0x123));
+        assert_eq!(cpu.sp, Address::new(3));
+
+        assert_eq!(memory.0, expected);
+
+        let expected = [0, 0, 0, 0, 0x54, 0x6, 0xbc, 0xa];
+
+        assert_eq!(cpu.pop(&memory), Address::new(0x123));
+        assert_eq!(cpu.sp, Address::new(5));
+
+        cpu.push(&mut memory, Address::new(0x654));
+        assert_eq!(memory.0, expected);
+        assert_eq!(cpu.sp, Address::new(3));
+
+        assert_eq!(cpu.pop(&memory), Address::new(0x654));
+        assert_eq!(cpu.sp, Address::new(5));
+        assert_eq!(cpu.pop(&memory), Address::new(0xabc));
+        assert_eq!(cpu.sp, Address::new(7));
     }
 }
