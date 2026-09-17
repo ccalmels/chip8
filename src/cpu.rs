@@ -251,7 +251,7 @@ impl Cpu {
             OpCode::Clear => peripherals.clear(),
             OpCode::Jump(address) => self.pc = address,
             OpCode::Load(v, value) => self.vs[v] = value,
-            OpCode::Add(v, value) => self.vs[v] += value,
+            OpCode::Add(v, value) => self.vs[v] = self.vs[v].wrapping_add(value),
             OpCode::LoadIndex(addr) => self.i = addr,
             OpCode::Draw(x, y, n) => {
                 let mut sprite = [0u8; 15];
