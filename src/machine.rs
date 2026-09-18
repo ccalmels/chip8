@@ -59,10 +59,7 @@ impl Renderable for Chip8 {
 
     fn render(&self, pixels: &mut Pixels<'_>) {
         for (i, pixel) in pixels.frame_mut().chunks_exact_mut(4).enumerate() {
-            pixel.copy_from_slice(&pixel_color(
-                self.framebuffer(),
-                i,
-            ));
+            pixel.copy_from_slice(&pixel_color(self.framebuffer(), i));
         }
     }
 }
