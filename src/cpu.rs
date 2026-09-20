@@ -163,6 +163,7 @@ enum OpCode {
     LShift(u8),
     SkipRegistersNotEqual(u8, u8),
     LoadIndex(Address),
+    Flow(Address),
     Draw(u8, u8, u8),
     IsKey(u8),
     IsNotKey(u8),
@@ -207,6 +208,7 @@ fn decode(opcode: u16) -> Result<OpCode, Error> {
         (0x8, x, _, 0xe) => Ok(OpCode::LShift(x)),
         (0x9, x, y, 0) => Ok(OpCode::SkipRegistersNotEqual(x, y)),
         (0xa, _, _, _) => Ok(OpCode::LoadIndex(Address::new(nnn))),
+        (0xb, _, _, _) => Ok(OpCode::Flow(Address::new(nnn))),
         (0xd, x, y, n) => Ok(OpCode::Draw(x, y, n)),
         (0xe, x, 9, 0xe) => Ok(OpCode::IsKey(x)),
         (0xe, x, 0xa, 1) => Ok(OpCode::IsNotKey(x)),
@@ -336,6 +338,12 @@ mod decode_tests {
     fn decode_load_index() {
         assert_eq!(decode(0xa123), Ok(OpCode::LoadIndex(Address::new(0x123))));
         assert_eq!(decode(0xafed), Ok(OpCode::LoadIndex(Address::new(0xfed))));
+    }
+
+    #[test]
+    fn decode_flow() {
+        assert_eq!(decode(0xb123), Ok(OpCode::Flow(Address::new(0x123))));
+        assert_eq!(decode(0xbfed), Ok(OpCode::Flow(Address::new(0xfed))));
     }
 
     #[test]
@@ -559,6 +567,7 @@ impl Cpu {
                 }
             }
             OpCode::LoadIndex(addr) => self.i = addr,
+            OpCode::Flow(addr) => self.pc = addr.wrapping_add(self.vs[0] as u16),
             OpCode::Draw(x, y, n) => {
                 let mut sprite = [0u8; 15];
 

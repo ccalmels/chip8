@@ -2,7 +2,7 @@ use chip_8::machine::Chip8;
 use chip_8::windowing::App;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let rom = std::fs::read("./tests/fixtures/4-flags.ch8")?;
+    let rom = std::fs::read("./tests/fixtures/5-quirks.ch8")?;
     let mut app = App::new(Chip8::from_rom(&rom)?);
 
     app.run();
