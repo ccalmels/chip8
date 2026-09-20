@@ -1,5 +1,6 @@
 use pixels::{Pixels, SurfaceTexture};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
@@ -15,7 +16,7 @@ pub trait Renderable {
 
 pub trait Updatable {
     type Error;
-    fn update(&mut self) -> Result<(), Self::Error>;
+    fn update(&mut self, delta: Duration) -> Result<(), Self::Error>;
 }
 
 pub struct App<E: Renderable + Updatable> {
@@ -23,6 +24,7 @@ pub struct App<E: Renderable + Updatable> {
     pixels: Option<Pixels<'static>>,
     engine: E,
     pub engine_error: Option<E::Error>,
+    last_timestamp: Instant,
 }
 
 impl<E: Renderable + Updatable> App<E> {
@@ -32,6 +34,7 @@ impl<E: Renderable + Updatable> App<E> {
             pixels: None,
             engine,
             engine_error: None,
+            last_timestamp: Instant::now(),
         }
     }
 
@@ -76,7 +79,12 @@ impl<E: Renderable + Updatable> ApplicationHandler for App<E> {
             }
             WindowEvent::RedrawRequested => {
                 if let (Some(pixels), Some(window)) = (&mut self.pixels, &self.window) {
-                    let rc = self.engine.update();
+                    let now = Instant::now();
+                    let delta = now - self.last_timestamp;
+
+                    self.last_timestamp = now;
+
+                    let rc = self.engine.update(delta);
 
                     if let Err(error) = rc {
                         self.engine_error = Some(error);

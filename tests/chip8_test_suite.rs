@@ -1,11 +1,13 @@
 use chip_8::machine::Chip8;
 use chip_8::windowing::Updatable;
 
+use std::time::Duration;
+
 fn assert_rom_matches_expected(rom: &[u8], expected: &[u8], steps: usize) {
     let mut chip8 = Chip8::from_rom(rom).unwrap();
 
     for _ in 0..steps {
-        chip8.update().unwrap();
+        chip8.update(Duration::from_millis(2)).unwrap();
     }
 
     assert_eq!(chip8.framebuffer(), expected);

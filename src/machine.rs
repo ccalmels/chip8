@@ -1,13 +1,35 @@
 use crate::Error;
 use crate::cpu::Cpu;
 use crate::peripheral::{HEIGHT, MEMORY_LENGTH, Peripheral, WIDTH};
+use crate::ticker::{Tickable, Ticker};
 use crate::windowing::{Renderable, Updatable};
 
 use pixels::Pixels;
+use std::time::Duration;
 
-pub struct Chip8 {
+struct Component {
     cpu: Cpu,
     peripheral: Peripheral,
+}
+
+impl Tickable for Component {
+    type Error = crate::Error;
+
+    // CPU at 500 Hz
+    const DT_TICK: Duration = Duration::from_micros(1_000_000 / 500);
+    // Timers at 60 Hz
+    const DT_TICK_TIMER: Duration = Duration::from_micros(1_000_000 / 60);
+
+    fn tick(&mut self) -> Result<(), Self::Error> {
+        self.cpu.step(&mut self.peripheral)
+    }
+
+    fn tick_timer(&mut self) {}
+}
+
+pub struct Chip8 {
+    component: Component,
+    ticker: Ticker,
 }
 
 impl Chip8 {
@@ -21,10 +43,13 @@ impl Chip8 {
             memory.extend_from_slice(rom);
             memory.resize(MEMORY_LENGTH, 0);
 
-            Ok(Self {
+            let component = Component {
                 cpu: Cpu::new(),
                 peripheral: Peripheral::new(memory.try_into().unwrap()),
-            })
+            };
+            let ticker = Ticker::new();
+
+            Ok(Self { component, ticker })
         } else {
             Err(Error::RomTooLarge {
                 size: rom.len(),
@@ -34,7 +59,7 @@ impl Chip8 {
     }
 
     pub fn framebuffer(&self) -> &[u8] {
-        self.peripheral.framebuffer()
+        self.component.peripheral.framebuffer()
     }
 }
 
@@ -67,8 +92,8 @@ impl Renderable for Chip8 {
 impl Updatable for Chip8 {
     type Error = crate::Error;
 
-    fn update(&mut self) -> Result<(), crate::Error> {
-        self.cpu.step(&mut self.peripheral)
+    fn update(&mut self, delta: Duration) -> Result<(), crate::Error> {
+        self.ticker.tick(delta, &mut self.component)
     }
 }
 

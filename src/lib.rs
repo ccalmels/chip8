@@ -1,6 +1,7 @@
 pub mod cpu;
 pub mod machine;
 pub mod peripheral;
+pub mod ticker;
 pub mod windowing;
 
 #[derive(PartialEq)]
