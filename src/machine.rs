@@ -63,6 +63,10 @@ impl Chip8 {
     pub fn framebuffer(&self) -> &[u8] {
         self.component.peripheral.framebuffer()
     }
+
+    pub fn quirks_rom(&mut self, value: u8) {
+        self.component.peripheral.quirks_rom(value);
+    }
 }
 
 const ORANGE: [u8; 4] = [0xff, 0x95, 0x0, 0xff];

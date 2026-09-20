@@ -48,3 +48,15 @@ fn flags() {
         952, // this number was found by dichotomy
     );
 }
+
+#[test]
+fn quirks() {
+    let expected = include_bytes!("fixtures/5-quirks.expected");
+    let mut chip8 = Chip8::from_rom(include_bytes!("fixtures/5-quirks.ch8")).unwrap();
+
+    chip8.quirks_rom(1);
+
+    chip8.update(Duration::from_secs(5)).unwrap();
+
+    assert_eq!(chip8.framebuffer(), expected);
+}
