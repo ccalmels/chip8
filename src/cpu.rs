@@ -171,7 +171,7 @@ enum OpCode {
     WaitKey(u8),
     Delay(u8),
     Sound(u8),
-    Increase(u8),
+    IncIndex(u8),
     Bcd(u8),
     Write(u8),
     Read(u8),
@@ -216,7 +216,7 @@ fn decode(opcode: u16) -> Result<OpCode, Error> {
         (0xf, x, 0, 0xa) => Ok(OpCode::WaitKey(x)),
         (0xf, x, 1, 5) => Ok(OpCode::Delay(x)),
         (0xf, x, 1, 8) => Ok(OpCode::Sound(x)),
-        (0xf, x, 1, 0xe) => Ok(OpCode::Increase(x)),
+        (0xf, x, 1, 0xe) => Ok(OpCode::IncIndex(x)),
         (0xf, x, 3, 3) => Ok(OpCode::Bcd(x)),
         (0xf, x, 5, 5) => Ok(OpCode::Write(x)),
         (0xf, x, 6, 5) => Ok(OpCode::Read(x)),
@@ -389,9 +389,9 @@ mod decode_tests {
     }
 
     #[test]
-    fn decode_increase() {
-        assert_eq!(decode(0xf31e), Ok(OpCode::Increase(0x3)));
-        assert_eq!(decode(0xf51e), Ok(OpCode::Increase(0x5)));
+    fn decode_inc_index() {
+        assert_eq!(decode(0xf31e), Ok(OpCode::IncIndex(0x3)));
+        assert_eq!(decode(0xf51e), Ok(OpCode::IncIndex(0x5)));
     }
 
     #[test]
@@ -597,7 +597,7 @@ impl Cpu {
             }
             OpCode::Delay(x) => self.dt = self.vs[x],
             OpCode::Sound(x) => self.st = self.vs[x],
-            OpCode::Increase(x) => self.i = self.i.wrapping_add(self.vs[x] as u16),
+            OpCode::IncIndex(x) => self.i = self.i.wrapping_add(self.vs[x] as u16),
             OpCode::Bcd(x) => {
                 let a = self.vs[x] / 100;
                 let b = (self.vs[x] / 10) % 10;
