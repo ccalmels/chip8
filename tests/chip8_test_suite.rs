@@ -13,6 +13,14 @@ fn assert_rom_matches_expected(rom: &[u8], expected: &[u8], steps: usize) {
     assert_eq!(chip8.framebuffer(), expected);
 }
 
+fn assert_rom_matches_expected_duration(rom: &[u8], expected: &[u8], duration: Duration) {
+    let mut chip8 = Chip8::from_rom(rom).unwrap();
+
+    chip8.update(duration).unwrap();
+
+    assert_eq!(chip8.framebuffer(), expected);
+}
+
 #[test]
 fn chip8_logo() {
     assert_rom_matches_expected(
@@ -33,19 +41,19 @@ fn ibm_logo() {
 
 #[test]
 fn corax_plus() {
-    assert_rom_matches_expected(
+    assert_rom_matches_expected_duration(
         include_bytes!("fixtures/3-corax+.ch8"),
         include_bytes!("fixtures/3-corax+.expected"),
-        306, // this number was found by dichotomy
+        Duration::from_secs(1),
     );
 }
 
 #[test]
 fn flags() {
-    assert_rom_matches_expected(
+    assert_rom_matches_expected_duration(
         include_bytes!("fixtures/4-flags.ch8"),
         include_bytes!("fixtures/4-flags.expected"),
-        952, // this number was found by dichotomy
+        Duration::from_secs(2),
     );
 }
 
