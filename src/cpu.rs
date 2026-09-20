@@ -158,9 +158,9 @@ enum OpCode {
     Xor(u8, u8),
     Add(u8, u8),
     Sub(u8, u8),
-    RShift(u8),
+    RShift(u8, u8),
     InvSub(u8, u8),
-    LShift(u8),
+    LShift(u8, u8),
     SkipRegistersNotEqual(u8, u8),
     LoadIndex(Address),
     Flow(Address),
@@ -203,9 +203,9 @@ fn decode(opcode: u16) -> Result<OpCode, Error> {
         (0x8, x, y, 3) => Ok(OpCode::Xor(x, y)),
         (0x8, x, y, 4) => Ok(OpCode::Add(x, y)),
         (0x8, x, y, 5) => Ok(OpCode::Sub(x, y)),
-        (0x8, x, _, 6) => Ok(OpCode::RShift(x)),
+        (0x8, x, y, 6) => Ok(OpCode::RShift(x, y)),
         (0x8, x, y, 7) => Ok(OpCode::InvSub(x, y)),
-        (0x8, x, _, 0xe) => Ok(OpCode::LShift(x)),
+        (0x8, x, y, 0xe) => Ok(OpCode::LShift(x, y)),
         (0x9, x, y, 0) => Ok(OpCode::SkipRegistersNotEqual(x, y)),
         (0xa, _, _, _) => Ok(OpCode::LoadIndex(Address::new(nnn))),
         (0xb, _, _, _) => Ok(OpCode::Flow(Address::new(nnn))),
@@ -318,8 +318,8 @@ mod decode_tests {
 
     #[test]
     fn decode_rshift() {
-        assert_eq!(decode(0x8126), Ok(OpCode::RShift(0x1)));
-        assert_eq!(decode(0x8fe6), Ok(OpCode::RShift(0xf)));
+        assert_eq!(decode(0x8126), Ok(OpCode::RShift(0x1, 0x2)));
+        assert_eq!(decode(0x8fe6), Ok(OpCode::RShift(0xf, 0xe)));
     }
 
     #[test]
@@ -330,8 +330,8 @@ mod decode_tests {
 
     #[test]
     fn decode_lshift() {
-        assert_eq!(decode(0x812e), Ok(OpCode::LShift(0x1)));
-        assert_eq!(decode(0x8fee), Ok(OpCode::LShift(0xf)));
+        assert_eq!(decode(0x812e), Ok(OpCode::LShift(0x1, 0x2)));
+        assert_eq!(decode(0x8fee), Ok(OpCode::LShift(0xf, 0xe)));
     }
 
     #[test]
@@ -555,9 +555,9 @@ impl Cpu {
                 self.vs[x] = res;
                 self.vs[0xf] = !overflowed as u8;
             }
-            OpCode::RShift(x) => {
-                let lsb = self.vs[x] & 0x1;
-                self.vs[x] >>= 1;
+            OpCode::RShift(x, y) => {
+                let lsb = self.vs[y] & 0x1;
+                self.vs[x] = self.vs[y] >> 1;
                 self.vs[0xf] = lsb;
             }
             OpCode::InvSub(x, y) => {
@@ -565,9 +565,9 @@ impl Cpu {
                 self.vs[x] = res;
                 self.vs[0xf] = !overflowed as u8;
             }
-            OpCode::LShift(x) => {
-                let msb = self.vs[x] >> 7;
-                self.vs[x] <<= 1;
+            OpCode::LShift(x, y) => {
+                let msb = self.vs[y] >> 7;
+                self.vs[x] = self.vs[y] << 1;
                 self.vs[0xf] = msb;
             }
             OpCode::SkipRegistersNotEqual(x, y) => {
