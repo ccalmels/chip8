@@ -159,6 +159,9 @@ enum OpCode {
     SkipRegistersNotEqual(u8, u8),
     LoadIndex(Address),
     Draw(u8, u8, u8),
+    SetDelay(u8),
+    Delay(u8),
+    Sound(u8),
     Increase(u8),
     Bcd(u8),
     Write(u8),
@@ -197,6 +200,9 @@ fn decode(opcode: u16) -> Result<OpCode, Error> {
         (0x9, x, y, 0) => Ok(OpCode::SkipRegistersNotEqual(x, y)),
         (0xa, _, _, _) => Ok(OpCode::LoadIndex(Address::new(nnn))),
         (0xd, x, y, n) => Ok(OpCode::Draw(x, y, n)),
+        (0xf, x, 0, 7) => Ok(OpCode::SetDelay(x)),
+        (0xf, x, 1, 5) => Ok(OpCode::Delay(x)),
+        (0xf, x, 1, 8) => Ok(OpCode::Sound(x)),
         (0xf, x, 1, 0xe) => Ok(OpCode::Increase(x)),
         (0xf, x, 3, 3) => Ok(OpCode::Bcd(x)),
         (0xf, x, 5, 5) => Ok(OpCode::Write(x)),
@@ -328,6 +334,24 @@ mod decode_tests {
     }
 
     #[test]
+    fn decode_set_delay() {
+        assert_eq!(decode(0xf107), Ok(OpCode::SetDelay(0x1)));
+        assert_eq!(decode(0xff07), Ok(OpCode::SetDelay(0xf)));
+    }
+
+    #[test]
+    fn decode_delay() {
+        assert_eq!(decode(0xf115), Ok(OpCode::Delay(0x1)));
+        assert_eq!(decode(0xff15), Ok(OpCode::Delay(0xf)));
+    }
+
+    #[test]
+    fn decode_sound() {
+        assert_eq!(decode(0xf118), Ok(OpCode::Sound(0x1)));
+        assert_eq!(decode(0xff18), Ok(OpCode::Sound(0xf)));
+    }
+
+    #[test]
     fn decode_increase() {
         assert_eq!(decode(0xf31e), Ok(OpCode::Increase(0x3)));
         assert_eq!(decode(0xf51e), Ok(OpCode::Increase(0x5)));
@@ -389,6 +413,8 @@ pub struct Cpu {
     sp: Address,
     i: Address,
     vs: Registers,
+    dt: u8, // delay timer
+    st: u8, // sound timer
 }
 
 impl Cpu {
@@ -401,6 +427,8 @@ impl Cpu {
             sp: Cpu::SP,
             i: Address::new(0),
             vs: Registers([0; 16]),
+            dt: 0,
+            st: 0,
         }
     }
 
@@ -422,6 +450,15 @@ impl Cpu {
         let high = memory.read(self.sp);
 
         Address::new((high as u16) << 8 | low as u16)
+    }
+
+    pub fn tick_timer(&mut self) {
+        if self.dt > 0 {
+            self.dt -= 1;
+        }
+        if self.st > 0 {
+            self.st -= 1;
+        }
     }
 
     pub fn step<P: Memory + Display>(&mut self, peripheral: &mut P) -> Result<(), crate::Error> {
@@ -499,6 +536,9 @@ impl Cpu {
 
                 self.vs[0xf] = peripheral.draw(self.vs[x], self.vs[y], &sprite[..n as usize]) as u8;
             }
+            OpCode::SetDelay(x) => self.vs[x] = self.dt,
+            OpCode::Delay(x) => self.dt = self.vs[x],
+            OpCode::Sound(x) => self.st = self.vs[x],
             OpCode::Increase(x) => self.i = self.i.wrapping_add(self.vs[x] as u16),
             OpCode::Bcd(x) => {
                 let a = self.vs[x] / 100;
@@ -559,6 +599,8 @@ mod cpu_tests {
             sp: Address::new(0x7),
             i: Address::new(0),
             vs: Registers([0; 16]),
+            dt: 0,
+            st: 0,
         };
         let mut memory = MockMemory([0; 8]);
 

@@ -24,7 +24,9 @@ impl Tickable for Component {
         self.cpu.step(&mut self.peripheral)
     }
 
-    fn tick_timer(&mut self) {}
+    fn tick_timer(&mut self) {
+        self.cpu.tick_timer();
+    }
 }
 
 pub struct Chip8 {
