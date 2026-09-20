@@ -533,9 +533,18 @@ impl Cpu {
             OpCode::Load(v, value) => self.vs[v] = value,
             OpCode::Inc(v, value) => self.vs[v] = self.vs[v].wrapping_add(value),
             OpCode::Set(x, y) => self.vs[x] = self.vs[y],
-            OpCode::Or(x, y) => self.vs[x] |= self.vs[y],
-            OpCode::And(x, y) => self.vs[x] &= self.vs[y],
-            OpCode::Xor(x, y) => self.vs[x] ^= self.vs[y],
+            OpCode::Or(x, y) => {
+                self.vs[x] |= self.vs[y];
+                self.vs[0xf] = 0
+            }
+            OpCode::And(x, y) => {
+                self.vs[x] &= self.vs[y];
+                self.vs[0xf] = 0
+            }
+            OpCode::Xor(x, y) => {
+                self.vs[x] ^= self.vs[y];
+                self.vs[0xf] = 0
+            }
             OpCode::Add(x, y) => {
                 let (res, overflowed) = self.vs[x].overflowing_add(self.vs[y]);
                 self.vs[x] = res;
