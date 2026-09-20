@@ -1,4 +1,4 @@
-use crate::cpu::{Address, Display, Memory};
+use crate::cpu::{Address, Display, Keypad, Memory};
 
 pub const WIDTH: u8 = 64;
 pub const HEIGHT: u8 = 32;
@@ -69,6 +69,16 @@ impl Display for Peripheral {
         }
 
         ret
+    }
+}
+
+impl Keypad for Peripheral {
+    fn key_pressed(&self, _key: u8) -> bool {
+        false
+    }
+
+    fn wait_key(&self) -> Option<u8> {
+        None
     }
 }
 

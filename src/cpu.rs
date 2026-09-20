@@ -136,6 +136,11 @@ pub trait Display {
     fn draw(&mut self, x: u8, y: u8, sprite: &[u8]) -> bool;
 }
 
+pub trait Keypad {
+    fn key_pressed(&self, key: u8) -> bool;
+    fn wait_key(&self) -> Option<u8>;
+}
+
 #[derive(PartialEq, Debug)]
 enum OpCode {
     Clear,
@@ -159,7 +164,10 @@ enum OpCode {
     SkipRegistersNotEqual(u8, u8),
     LoadIndex(Address),
     Draw(u8, u8, u8),
+    IsKey(u8),
+    IsNotKey(u8),
     SetDelay(u8),
+    WaitKey(u8),
     Delay(u8),
     Sound(u8),
     Increase(u8),
@@ -200,7 +208,10 @@ fn decode(opcode: u16) -> Result<OpCode, Error> {
         (0x9, x, y, 0) => Ok(OpCode::SkipRegistersNotEqual(x, y)),
         (0xa, _, _, _) => Ok(OpCode::LoadIndex(Address::new(nnn))),
         (0xd, x, y, n) => Ok(OpCode::Draw(x, y, n)),
+        (0xe, x, 9, 0xe) => Ok(OpCode::IsKey(x)),
+        (0xe, x, 0xa, 1) => Ok(OpCode::IsNotKey(x)),
         (0xf, x, 0, 7) => Ok(OpCode::SetDelay(x)),
+        (0xf, x, 0, 0xa) => Ok(OpCode::WaitKey(x)),
         (0xf, x, 1, 5) => Ok(OpCode::Delay(x)),
         (0xf, x, 1, 8) => Ok(OpCode::Sound(x)),
         (0xf, x, 1, 0xe) => Ok(OpCode::Increase(x)),
@@ -334,9 +345,27 @@ mod decode_tests {
     }
 
     #[test]
+    fn decode_is_key() {
+        assert_eq!(decode(0xe19e), Ok(OpCode::IsKey(0x1)));
+        assert_eq!(decode(0xef9e), Ok(OpCode::IsKey(0xf)));
+    }
+
+    #[test]
+    fn decode_is_not_key() {
+        assert_eq!(decode(0xe1a1), Ok(OpCode::IsNotKey(0x1)));
+        assert_eq!(decode(0xefa1), Ok(OpCode::IsNotKey(0xf)));
+    }
+
+    #[test]
     fn decode_set_delay() {
         assert_eq!(decode(0xf107), Ok(OpCode::SetDelay(0x1)));
         assert_eq!(decode(0xff07), Ok(OpCode::SetDelay(0xf)));
+    }
+
+    #[test]
+    fn decode_wait_key() {
+        assert_eq!(decode(0xf10a), Ok(OpCode::WaitKey(0x1)));
+        assert_eq!(decode(0xff0a), Ok(OpCode::WaitKey(0xf)));
     }
 
     #[test]
@@ -461,7 +490,10 @@ impl Cpu {
         }
     }
 
-    pub fn step<P: Memory + Display>(&mut self, peripheral: &mut P) -> Result<(), crate::Error> {
+    pub fn step<P: Memory + Display + Keypad>(
+        &mut self,
+        peripheral: &mut P,
+    ) -> Result<(), crate::Error> {
         let opcode = fetch(peripheral, self.pc);
         let opcode = decode(opcode)?;
 
@@ -536,7 +568,24 @@ impl Cpu {
 
                 self.vs[0xf] = peripheral.draw(self.vs[x], self.vs[y], &sprite[..n as usize]) as u8;
             }
+            OpCode::IsKey(x) => {
+                if peripheral.key_pressed(self.vs[x] & 0xf) {
+                    self.pc = self.pc.wrapping_add(2);
+                }
+            }
+            OpCode::IsNotKey(x) => {
+                if !peripheral.key_pressed(self.vs[x] & 0xf) {
+                    self.pc = self.pc.wrapping_add(2);
+                }
+            }
             OpCode::SetDelay(x) => self.vs[x] = self.dt,
+            OpCode::WaitKey(x) => {
+                if let Some(k) = peripheral.wait_key() {
+                    self.vs[x] = k;
+                } else {
+                    self.pc = self.pc.wrapping_sub(2);
+                }
+            }
             OpCode::Delay(x) => self.dt = self.vs[x],
             OpCode::Sound(x) => self.st = self.vs[x],
             OpCode::Increase(x) => self.i = self.i.wrapping_add(self.vs[x] as u16),
