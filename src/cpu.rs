@@ -145,6 +145,10 @@ pub trait Beeper {
     fn beep(&self, running: bool);
 }
 
+pub trait Rng {
+    fn next(&self) -> u8;
+}
+
 #[derive(PartialEq, Debug)]
 enum OpCode {
     Clear,
@@ -168,6 +172,7 @@ enum OpCode {
     SkipRegistersNotEqual(u8, u8),
     LoadIndex(Address),
     Flow(Address),
+    Rand(u8, u8),
     Draw(u8, u8, u8),
     IsKey(u8),
     IsNotKey(u8),
@@ -214,6 +219,7 @@ fn decode(opcode: u16) -> Result<OpCode, Error> {
         (0x9, x, y, 0) => Ok(OpCode::SkipRegistersNotEqual(x, y)),
         (0xa, _, _, _) => Ok(OpCode::LoadIndex(Address::new(nnn))),
         (0xb, _, _, _) => Ok(OpCode::Flow(Address::new(nnn))),
+        (0xc, x, _, _) => Ok(OpCode::Rand(x, nn)),
         (0xd, x, y, n) => Ok(OpCode::Draw(x, y, n)),
         (0xe, x, 9, 0xe) => Ok(OpCode::IsKey(x)),
         (0xe, x, 0xa, 1) => Ok(OpCode::IsNotKey(x)),
@@ -350,6 +356,12 @@ mod decode_tests {
     fn decode_flow() {
         assert_eq!(decode(0xb123), Ok(OpCode::Flow(Address::new(0x123))));
         assert_eq!(decode(0xbfed), Ok(OpCode::Flow(Address::new(0xfed))));
+    }
+
+    #[test]
+    fn decode_rand() {
+        assert_eq!(decode(0xc123), Ok(OpCode::Rand(0x1, 0x23)));
+        assert_eq!(decode(0xcfed), Ok(OpCode::Rand(0xf, 0xed)));
     }
 
     #[test]
@@ -514,7 +526,12 @@ impl Cpu {
         beeper.beep(self.st != 0);
     }
 
-    fn execute<P: Memory + Display + Keypad>(&mut self, peripheral: &mut P, opcode: OpCode) {
+    fn execute<P: Memory + Display + Keypad, R: Rng>(
+        &mut self,
+        peripheral: &mut P,
+        rng: &R,
+        opcode: OpCode,
+    ) {
         match opcode {
             OpCode::Clear => peripheral.clear(),
             OpCode::Return => self.pc = self.pop(peripheral),
@@ -585,6 +602,7 @@ impl Cpu {
             }
             OpCode::LoadIndex(addr) => self.i = addr,
             OpCode::Flow(addr) => self.pc = addr.wrapping_add(self.vs[0] as u16),
+            OpCode::Rand(x, nn) => self.vs[x] = rng.next() & nn,
             OpCode::Draw(x, y, n) => {
                 let mut sprite = [0u8; 15];
 
@@ -643,16 +661,17 @@ impl Cpu {
         }
     }
 
-    pub fn step<P: Memory + Display + Keypad>(
+    pub fn step<P: Memory + Display + Keypad, R: Rng>(
         &mut self,
         peripheral: &mut P,
+        rng: &R,
     ) -> Result<(), crate::Error> {
         let opcode = fetch(peripheral, self.pc);
         let opcode = decode(opcode)?;
 
         self.pc = self.pc.wrapping_add(2);
 
-        self.execute(peripheral, opcode);
+        self.execute(peripheral, rng, opcode);
 
         Ok(())
     }

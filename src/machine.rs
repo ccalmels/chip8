@@ -1,15 +1,25 @@
 use crate::Error;
-use crate::cpu::Cpu;
+use crate::cpu::{Cpu, Rng};
 use crate::peripheral::{HEIGHT, MEMORY_LENGTH, Peripheral, WIDTH};
 use crate::ticker::{Tickable, Ticker};
 use crate::windowing::{KeyListener, Renderable, Updatable};
 
 use pixels::Pixels;
+use rand::random;
 use std::time::Duration;
+
+struct Random();
+
+impl Rng for Random {
+    fn next(&self) -> u8 {
+        random()
+    }
+}
 
 struct Component {
     cpu: Cpu,
     peripheral: Peripheral,
+    rng: Random,
 }
 
 impl Tickable for Component {
@@ -21,7 +31,7 @@ impl Tickable for Component {
     const DT_TICK_TIMER: Duration = Duration::from_micros(1_000_000 / 60);
 
     fn tick(&mut self) -> Result<(), Self::Error> {
-        self.cpu.step(&mut self.peripheral)
+        self.cpu.step(&mut self.peripheral, &self.rng)
     }
 
     fn tick_timer(&mut self) {
@@ -73,6 +83,7 @@ impl Chip8 {
             let component = Component {
                 cpu: Cpu::new(),
                 peripheral: Peripheral::new(memory.try_into().unwrap()),
+                rng: Random(),
             };
             let ticker = Ticker::new();
 

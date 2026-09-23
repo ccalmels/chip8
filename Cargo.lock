@@ -281,6 +281,7 @@ name = "chip-8"
 version = "0.1.0"
 dependencies = [
  "pixels",
+ "rand",
  "rodio",
  "winit",
 ]
