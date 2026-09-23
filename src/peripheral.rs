@@ -26,10 +26,6 @@ impl Peripheral {
 
         ret
     }
-
-    pub fn quirks_rom(&mut self, value: u8) {
-        self.memory[0x1ff] = value;
-    }
 }
 
 impl Memory for Peripheral {

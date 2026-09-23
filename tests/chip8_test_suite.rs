@@ -60,9 +60,7 @@ fn flags() {
 #[test]
 fn quirks() {
     let expected = include_bytes!("fixtures/5-quirks.expected");
-    let mut chip8 = Chip8::from_rom(include_bytes!("fixtures/5-quirks.ch8")).unwrap();
-
-    chip8.quirks_rom(1);
+    let mut chip8 = Chip8::from_rom_with_quirk(include_bytes!("fixtures/5-quirks.ch8"), 1).unwrap();
 
     chip8.update(Duration::from_secs(5)).unwrap();
 

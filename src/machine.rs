@@ -35,12 +35,14 @@ pub struct Chip8 {
 }
 
 impl Chip8 {
-    pub fn from_rom(rom: &[u8]) -> Result<Self, crate::Error> {
+    pub fn from_rom_with_quirk(rom: &[u8], quirk: u8) -> Result<Self, crate::Error> {
         let start = Cpu::START_PC.value() as usize;
         let capacity = MEMORY_LENGTH - start;
 
         if rom.len() < capacity {
-            let mut memory = vec![0; start];
+            let mut memory = vec![0; start - 1];
+
+            memory.push(quirk);
 
             memory.extend_from_slice(rom);
             memory.resize(MEMORY_LENGTH, 0);
@@ -60,12 +62,12 @@ impl Chip8 {
         }
     }
 
-    pub fn framebuffer(&self) -> &[u8] {
-        self.component.peripheral.framebuffer()
+    pub fn from_rom(rom: &[u8]) -> Result<Self, crate::Error> {
+        Self::from_rom_with_quirk(rom, 0)
     }
 
-    pub fn quirks_rom(&mut self, value: u8) {
-        self.component.peripheral.quirks_rom(value);
+    pub fn framebuffer(&self) -> &[u8] {
+        self.component.peripheral.framebuffer()
     }
 }
 
