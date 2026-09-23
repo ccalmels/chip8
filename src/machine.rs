@@ -59,7 +59,7 @@ impl Chip8 {
         let fonts = Cpu::FONTS.value() as usize;
         let capacity = MEMORY_LENGTH - start;
 
-        if rom.len() < capacity {
+        if rom.len() <= capacity {
             let mut memory = vec![0; fonts];
 
             memory.extend_from_slice(FONTS);
