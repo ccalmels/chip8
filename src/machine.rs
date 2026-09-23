@@ -2,7 +2,7 @@ use crate::Error;
 use crate::cpu::Cpu;
 use crate::peripheral::{HEIGHT, MEMORY_LENGTH, Peripheral, WIDTH};
 use crate::ticker::{Tickable, Ticker};
-use crate::windowing::{Renderable, Updatable};
+use crate::windowing::{KeyListener, Renderable, Updatable};
 
 use pixels::Pixels;
 use std::time::Duration;
@@ -102,6 +102,32 @@ impl Updatable for Chip8 {
 
     fn update(&mut self, delta: Duration) -> Result<(), crate::Error> {
         self.ticker.tick(delta, &mut self.component)
+    }
+}
+
+impl KeyListener for Chip8 {
+    fn event(&mut self, key: winit::keyboard::KeyCode, is_pressed: bool) {
+        let key = match key {
+            winit::keyboard::KeyCode::Digit1 => 1,
+            winit::keyboard::KeyCode::Digit2 => 2,
+            winit::keyboard::KeyCode::Digit3 => 3,
+            winit::keyboard::KeyCode::Digit4 => 0xc,
+            winit::keyboard::KeyCode::KeyQ => 4,
+            winit::keyboard::KeyCode::KeyW => 5,
+            winit::keyboard::KeyCode::KeyE => 6,
+            winit::keyboard::KeyCode::KeyR => 0xd,
+            winit::keyboard::KeyCode::KeyA => 7,
+            winit::keyboard::KeyCode::KeyS => 8,
+            winit::keyboard::KeyCode::KeyD => 9,
+            winit::keyboard::KeyCode::KeyF => 0xe,
+            winit::keyboard::KeyCode::KeyZ => 0xa,
+            winit::keyboard::KeyCode::KeyX => 0,
+            winit::keyboard::KeyCode::KeyC => 0xb,
+            winit::keyboard::KeyCode::KeyV => 0xf,
+            _ => return,
+        };
+
+        self.component.peripheral.keypad.key_event(key, is_pressed);
     }
 }
 

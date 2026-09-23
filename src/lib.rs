@@ -1,3 +1,4 @@
+pub mod cd4515;
 pub mod cpu;
 pub mod machine;
 pub mod peripheral;

@@ -138,7 +138,7 @@ pub trait Display {
 
 pub trait Keypad {
     fn key_pressed(&self, key: u8) -> bool;
-    fn wait_key(&self) -> Option<u8>;
+    fn wait_key(&mut self) -> Option<u8>;
 }
 
 #[derive(PartialEq, Debug)]

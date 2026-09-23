@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::WindowEvent;
+use winit::event::{KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
@@ -19,6 +19,10 @@ pub trait Updatable {
     fn update(&mut self, delta: Duration) -> Result<(), Self::Error>;
 }
 
+pub trait KeyListener {
+    fn event(&mut self, key: winit::keyboard::KeyCode, is_pressed: bool);
+}
+
 pub struct App<E: Renderable + Updatable> {
     window: Option<Arc<Window>>,
     pixels: Option<Pixels<'static>>,
@@ -27,7 +31,7 @@ pub struct App<E: Renderable + Updatable> {
     last_timestamp: Instant,
 }
 
-impl<E: Renderable + Updatable> App<E> {
+impl<E: Renderable + Updatable + KeyListener> App<E> {
     pub fn new(engine: E) -> Self {
         Self {
             window: None,
@@ -47,7 +51,7 @@ impl<E: Renderable + Updatable> App<E> {
     }
 }
 
-impl<E: Renderable + Updatable> ApplicationHandler for App<E> {
+impl<E: Renderable + Updatable + KeyListener> ApplicationHandler for App<E> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none() {
             let window = event_loop
@@ -96,6 +100,18 @@ impl<E: Renderable + Updatable> ApplicationHandler for App<E> {
                     pixels.render().unwrap();
                     window.request_redraw();
                 }
+            }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: winit::keyboard::PhysicalKey::Code(keycode),
+                        state,
+                        repeat: false,
+                        ..
+                    },
+                ..
+            } => {
+                self.engine.event(keycode, state.is_pressed());
             }
             _ => (),
         }

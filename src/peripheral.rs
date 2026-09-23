@@ -1,3 +1,4 @@
+use crate::cd4515::Cd4515;
 use crate::cpu::{Address, Display, Keypad, Memory};
 
 pub const WIDTH: u8 = 64;
@@ -8,11 +9,15 @@ pub const MEMORY_LENGTH: usize = 0x1000;
 
 pub struct Peripheral {
     memory: [u8; MEMORY_LENGTH],
+    pub(crate) keypad: Cd4515,
 }
 
 impl Peripheral {
     pub fn new(memory: [u8; MEMORY_LENGTH]) -> Self {
-        Self { memory }
+        Self {
+            memory,
+            keypad: Cd4515::default(),
+        }
     }
 
     pub fn framebuffer(&self) -> &[u8] {
@@ -72,12 +77,12 @@ impl Display for Peripheral {
 }
 
 impl Keypad for Peripheral {
-    fn key_pressed(&self, _key: u8) -> bool {
-        false
+    fn key_pressed(&self, key: u8) -> bool {
+        self.keypad.key_pressed(key)
     }
 
-    fn wait_key(&self) -> Option<u8> {
-        None
+    fn wait_key(&mut self) -> Option<u8> {
+        self.keypad.wait_key()
     }
 }
 
