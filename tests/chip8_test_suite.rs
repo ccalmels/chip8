@@ -1,5 +1,5 @@
 use chip_8::machine::Chip8;
-use chip_8::windowing::Updatable;
+use chip_8::windowing::{KeyListener, Updatable};
 
 use std::time::Duration;
 
@@ -63,6 +63,20 @@ fn quirks() {
     let mut chip8 = Chip8::from_rom_with_quirk(include_bytes!("fixtures/5-quirks.ch8"), 1).unwrap();
 
     chip8.update(Duration::from_secs(5)).unwrap();
+
+    assert_eq!(chip8.framebuffer(), expected);
+}
+
+#[test]
+fn keypad() {
+    let expected = include_bytes!("fixtures/6-keypad.expected");
+    let mut chip8 = Chip8::from_rom_with_quirk(include_bytes!("fixtures/6-keypad.ch8"), 3).unwrap();
+
+    chip8.update(Duration::from_secs(1)).unwrap();
+    chip8.event(winit::keyboard::KeyCode::Digit1, true);
+    chip8.update(Duration::from_millis(10)).unwrap();
+    chip8.event(winit::keyboard::KeyCode::Digit1, false);
+    chip8.update(Duration::from_secs(1)).unwrap();
 
     assert_eq!(chip8.framebuffer(), expected);
 }
