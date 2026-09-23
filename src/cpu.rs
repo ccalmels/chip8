@@ -141,6 +141,10 @@ pub trait Keypad {
     fn wait_key(&mut self) -> Option<u8>;
 }
 
+pub trait Beeper {
+    fn beep(&self, running: bool);
+}
+
 #[derive(PartialEq, Debug)]
 enum OpCode {
     Clear,
@@ -489,13 +493,16 @@ impl Cpu {
         Address::new((high as u16) << 8 | low as u16)
     }
 
-    pub fn tick_timer(&mut self) {
+    pub fn tick_timer<B: Beeper>(&mut self, beeper: &B) {
         if self.dt > 0 {
             self.dt -= 1;
         }
+
         if self.st > 0 {
             self.st -= 1;
         }
+
+        beeper.beep(self.st != 0);
     }
 
     fn execute<P: Memory + Display + Keypad>(&mut self, peripheral: &mut P, opcode: OpCode) {

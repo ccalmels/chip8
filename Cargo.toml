@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 pixels = "0.17"
+rodio = "0.22.2"
 winit = "0.30.13"

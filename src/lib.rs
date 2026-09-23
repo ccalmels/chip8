@@ -1,3 +1,4 @@
+pub mod ca555;
 pub mod cd4515;
 pub mod cpu;
 pub mod machine;

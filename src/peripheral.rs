@@ -1,3 +1,4 @@
+use crate::ca555::Ca555;
 use crate::cd4515::Cd4515;
 use crate::cpu::{Address, Display, Keypad, Memory};
 
@@ -9,6 +10,7 @@ pub const MEMORY_LENGTH: usize = 0x1000;
 
 pub struct Peripheral {
     memory: [u8; MEMORY_LENGTH],
+    pub(crate) beeper: Ca555,
     pub(crate) keypad: Cd4515,
 }
 
@@ -16,6 +18,7 @@ impl Peripheral {
     pub fn new(memory: [u8; MEMORY_LENGTH]) -> Self {
         Self {
             memory,
+            beeper: Ca555::default(),
             keypad: Cd4515::default(),
         }
     }

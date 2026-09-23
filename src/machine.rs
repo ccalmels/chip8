@@ -25,7 +25,7 @@ impl Tickable for Component {
     }
 
     fn tick_timer(&mut self) {
-        self.cpu.tick_timer();
+        self.cpu.tick_timer(&self.peripheral.beeper);
     }
 }
 
