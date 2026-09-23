@@ -735,3 +735,90 @@ mod cpu_tests {
         assert_eq!(cpu.sp, Address::new(7));
     }
 }
+
+#[cfg(test)]
+mod execute_tests {
+    use super::*;
+
+    struct MockPeripheral {
+        memory: [u8; 16],
+        cleared: bool,
+        last_draw: Option<(u8, u8, Vec<u8>)>,
+        draw_returns: bool,
+        pressed: u16,
+        waited_key: Option<u8>,
+    }
+
+    impl MockPeripheral {
+        fn new() -> Self {
+            MockPeripheral {
+                memory: [0; 16],
+                cleared: false,
+                last_draw: None,
+                draw_returns: false,
+                pressed: 0,
+                waited_key: None,
+            }
+        }
+    }
+
+    impl Memory for MockPeripheral {
+        fn read(&self, address: Address) -> u8 {
+            self.memory[address.value() as usize]
+        }
+
+        fn write(&mut self, address: Address, value: u8) {
+            self.memory[address.value() as usize] = value;
+        }
+    }
+
+    impl Display for MockPeripheral {
+        fn clear(&mut self) {
+            self.cleared = true;
+        }
+
+        fn draw(&mut self, x: u8, y: u8, sprite: &[u8]) -> bool {
+            self.last_draw = Some((x, y, sprite.to_vec()));
+            self.draw_returns
+        }
+    }
+
+    impl Keypad for MockPeripheral {
+        fn key_pressed(&self, key: u8) -> bool {
+            self.pressed & (1 << key) != 0
+        }
+
+        fn wait_key(&mut self) -> Option<u8> {
+            self.waited_key
+        }
+    }
+
+    struct FixedRng(u8);
+
+    impl Rng for FixedRng {
+        fn next(&self) -> u8 {
+            self.0
+        }
+    }
+
+    #[test]
+    fn execute_rand() {
+        let mut cpu = Cpu::new();
+        let mut p = MockPeripheral::new();
+        let rng = FixedRng(0xff);
+
+        cpu.execute(&mut p, &rng, OpCode::Rand(2, 0x0));
+
+        assert_eq!(cpu.vs[2], 0);
+
+        cpu.execute(&mut p, &rng, OpCode::Rand(3, 0xa2));
+
+        assert_eq!(cpu.vs[3], 0xa2);
+
+        let rng = FixedRng(0xf0);
+
+        cpu.execute(&mut p, &rng, OpCode::Rand(4, 0xa2));
+
+        assert_eq!(cpu.vs[4], 0xa0);
+    }
+}
