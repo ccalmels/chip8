@@ -34,9 +34,9 @@ impl Ticker {
             self.timer_acccumulator += T::DT_TICK;
 
             if self.timer_acccumulator >= T::DT_TICK_TIMER {
-                target.tick_timer();
-
                 self.timer_acccumulator -= T::DT_TICK_TIMER;
+
+                target.tick_timer();
             }
 
             target.tick()?;
