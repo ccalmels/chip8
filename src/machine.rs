@@ -125,7 +125,9 @@ impl Renderable for Chip8 {
     const HEIGHT: u32 = HEIGHT as u32;
 
     fn render(&self, pixels: &mut Pixels<'_>) {
-        for (i, pixel) in pixels.frame_mut().chunks_exact_mut(4).enumerate() {
+        let (chunks, _remainders) = pixels.frame_mut().as_chunks_mut::<4>();
+
+        for (i, pixel) in chunks.iter_mut().enumerate() {
             pixel.copy_from_slice(&pixel_color(self.framebuffer(), i));
         }
     }
