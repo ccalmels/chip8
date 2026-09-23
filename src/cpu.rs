@@ -498,15 +498,7 @@ impl Cpu {
         }
     }
 
-    pub fn step<P: Memory + Display + Keypad>(
-        &mut self,
-        peripheral: &mut P,
-    ) -> Result<(), crate::Error> {
-        let opcode = fetch(peripheral, self.pc);
-        let opcode = decode(opcode)?;
-
-        self.pc = self.pc.wrapping_add(2);
-
+    fn execute<P: Memory + Display + Keypad>(&mut self, peripheral: &mut P, opcode: OpCode) {
         match opcode {
             OpCode::Clear => peripheral.clear(),
             OpCode::Return => self.pc = self.pop(peripheral),
@@ -632,6 +624,18 @@ impl Cpu {
                 }
             }
         }
+    }
+
+    pub fn step<P: Memory + Display + Keypad>(
+        &mut self,
+        peripheral: &mut P,
+    ) -> Result<(), crate::Error> {
+        let opcode = fetch(peripheral, self.pc);
+        let opcode = decode(opcode)?;
+
+        self.pc = self.pc.wrapping_add(2);
+
+        self.execute(peripheral, opcode);
 
         Ok(())
     }
