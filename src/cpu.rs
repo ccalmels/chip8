@@ -176,6 +176,7 @@ enum OpCode {
     Delay(u8),
     Sound(u8),
     IncIndex(u8),
+    Sprite(u8),
     Bcd(u8),
     Write(u8),
     Read(u8),
@@ -221,6 +222,7 @@ fn decode(opcode: u16) -> Result<OpCode, Error> {
         (0xf, x, 1, 5) => Ok(OpCode::Delay(x)),
         (0xf, x, 1, 8) => Ok(OpCode::Sound(x)),
         (0xf, x, 1, 0xe) => Ok(OpCode::IncIndex(x)),
+        (0xf, x, 2, 9) => Ok(OpCode::Sprite(x)),
         (0xf, x, 3, 3) => Ok(OpCode::Bcd(x)),
         (0xf, x, 5, 5) => Ok(OpCode::Write(x)),
         (0xf, x, 6, 5) => Ok(OpCode::Read(x)),
@@ -399,6 +401,12 @@ mod decode_tests {
     }
 
     #[test]
+    fn decode_sprite() {
+        assert_eq!(decode(0xf329), Ok(OpCode::Sprite(0x3)));
+        assert_eq!(decode(0xf529), Ok(OpCode::Sprite(0x5)));
+    }
+
+    #[test]
     fn decode_bcd() {
         assert_eq!(decode(0xf333), Ok(OpCode::Bcd(0x3)));
         assert_eq!(decode(0xf533), Ok(OpCode::Bcd(0x5)));
@@ -460,6 +468,7 @@ pub struct Cpu {
 
 impl Cpu {
     pub const START_PC: Address = Address::new(0x200);
+    pub const FONTS: Address = Address::new(0x050);
     const SP: Address = Address::new(0xeff);
 
     pub fn new() -> Self {
@@ -606,6 +615,7 @@ impl Cpu {
             OpCode::Delay(x) => self.dt = self.vs[x],
             OpCode::Sound(x) => self.st = self.vs[x],
             OpCode::IncIndex(x) => self.i = self.i.wrapping_add(self.vs[x] as u16),
+            OpCode::Sprite(x) => self.i = Self::FONTS.wrapping_add((self.vs[x] as u16 & 0xf) * 5),
             OpCode::Bcd(x) => {
                 let a = self.vs[x] / 100;
                 let b = (self.vs[x] / 10) % 10;
