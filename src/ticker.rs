@@ -12,14 +12,14 @@ pub trait Tickable {
 
 pub struct Ticker {
     accumulator: Duration,
-    timer_acccumulator: Duration,
+    timer_accumulator: Duration,
 }
 
 impl Ticker {
     pub fn new() -> Self {
         Ticker {
             accumulator: Duration::ZERO,
-            timer_acccumulator: Duration::ZERO,
+            timer_accumulator: Duration::ZERO,
         }
     }
 
@@ -31,10 +31,10 @@ impl Ticker {
 
         while self.accumulator >= T::DT_TICK {
             self.accumulator -= T::DT_TICK;
-            self.timer_acccumulator += T::DT_TICK;
+            self.timer_accumulator += T::DT_TICK;
 
-            if self.timer_acccumulator >= T::DT_TICK_TIMER {
-                self.timer_acccumulator -= T::DT_TICK_TIMER;
+            if self.timer_accumulator >= T::DT_TICK_TIMER {
+                self.timer_accumulator -= T::DT_TICK_TIMER;
 
                 target.tick_timer();
             }
