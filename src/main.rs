@@ -5,6 +5,11 @@ use clap::Parser;
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
+    /// schip-modern mode
+    #[arg(short, long)]
+    superchip: bool,
+
+    /// ROM path
     #[arg()]
     rom_path: String,
 }
@@ -12,7 +17,7 @@ struct Args {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let rom = std::fs::read(args.rom_path)?;
-    let mut app = App::new(Chip8::from_rom(&rom)?);
+    let mut app = App::new(Chip8::from_rom(args.superchip, &rom)?);
 
     app.run();
 

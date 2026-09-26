@@ -64,7 +64,11 @@ const FONTS: &[u8] = &[
 ];
 
 impl Chip8 {
-    pub fn from_rom_with_quirk(rom: &[u8], quirk: u8) -> Result<Self, crate::Error> {
+    pub fn from_rom_with_quirk(
+        is_superchip: bool,
+        rom: &[u8],
+        quirk: u8,
+    ) -> Result<Self, crate::Error> {
         let start = Cpu::START_PC.value() as usize;
         let fonts = Cpu::FONTS.value() as usize;
         let capacity = MEMORY_LENGTH - start;
@@ -96,8 +100,8 @@ impl Chip8 {
         }
     }
 
-    pub fn from_rom(rom: &[u8]) -> Result<Self, crate::Error> {
-        Self::from_rom_with_quirk(rom, 0)
+    pub fn from_rom(is_superchip: bool, rom: &[u8]) -> Result<Self, crate::Error> {
+        Self::from_rom_with_quirk(is_superchip, rom, 0)
     }
 
     pub fn framebuffer(&self) -> &[u8] {
