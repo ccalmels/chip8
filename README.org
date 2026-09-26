@@ -24,6 +24,29 @@ Hex keyboard with 16 keys from 0 to F.
 Original display resolution is 64x32 pixels. The Chip-8 only draw 8b wide sprite with height from 0 to 15. They are XORed with the corresponding screen pixels.
 *** CPU
 Not a real CPU. Opcodes are clocked at 500Hz.
+
+** SuperChip-8
+*** Memory
+No more framebuffer or stack inside the memory: 0x200-0xFFF is available.
+*** Display
+HiRes mode: 128 x 64
+*** New Opcode
+- Switch resolution
+- Scroll down, right, left
+- Fx30 for HiRes font sprite
+- Store/Load registers in an internal storage (not memory)
+*** OpCode changes
+- Quirks
+  - VF Reset
+  - memory index update (Fx55, Fx65)
+  - shifting modification
+  - different jump opcoce (Bxnn)
+- Draw 16x16
+*** Clock
+Opcodes clocked at 1KHz or better.
+*** Resources
+- https://chip8.gulrak.net/
+
 ** Resources
 - https://en.wikipedia.org/wiki/CHIP-8
 - https://beyondloom.com/blog/artofchip8.html
