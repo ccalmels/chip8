@@ -20,6 +20,7 @@ struct Component {
     cpu: Cpu,
     peripheral: Peripheral,
     rng: Random,
+    is_superchip: bool,
 }
 
 impl Tickable for Component {
@@ -31,7 +32,11 @@ impl Tickable for Component {
     const DT_TICK_TIMER: Duration = Duration::from_micros(1_000_000 / 60);
 
     fn tick(&mut self) -> Result<(), Self::Error> {
-        self.cpu.step(&mut self.peripheral, &self.rng)
+        if self.is_superchip {
+            self.cpu.super_step(&mut self.peripheral, &self.rng)
+        } else {
+            self.cpu.step(&mut self.peripheral, &self.rng)
+        }
     }
 
     fn tick_timer(&mut self) {
@@ -94,6 +99,7 @@ impl Chip8 {
                 cpu: Cpu::new(!is_superchip, quirks),
                 peripheral: Peripheral::new(!is_superchip, memory.try_into().unwrap()),
                 rng: Random(),
+                is_superchip,
             };
             let ticker = Ticker::new();
 

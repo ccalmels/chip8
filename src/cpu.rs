@@ -149,6 +149,19 @@ pub trait Rng {
     fn next(&self) -> u8;
 }
 
+fn opcode_split(opcode: u16) -> ((u8, u8, u8, u8), u8, u16) {
+    let nibbles = (
+        (opcode >> 12) as u8,
+        ((opcode >> 8) & 0xf) as u8,
+        ((opcode >> 4) & 0xf) as u8,
+        (opcode & 0xf) as u8,
+    );
+    let nn = (opcode & 0xff) as u8;
+    let nnn = opcode & 0xfff;
+
+    (nibbles, nn, nnn)
+}
+
 #[derive(PartialEq, Debug)]
 enum OpCode {
     Clear,
@@ -187,53 +200,48 @@ enum OpCode {
     Read(u8),
 }
 
-fn decode(opcode: u16) -> Result<OpCode, Error> {
-    let nibbles = (
-        (opcode >> 12) as u8,
-        ((opcode >> 8) & 0xf) as u8,
-        ((opcode >> 4) & 0xf) as u8,
-        (opcode & 0xf) as u8,
-    );
-    let nn = (opcode & 0xff) as u8;
-    let nnn = opcode & 0xfff;
-
+fn opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<OpCode> {
     match nibbles {
-        (0x0, 0x0, 0xe, 0x0) => Ok(OpCode::Clear),
-        (0x0, 0x0, 0xe, 0xe) => Ok(OpCode::Return),
-        (0x1, _, _, _) => Ok(OpCode::Jump(Address::new(nnn))),
-        (0x2, _, _, _) => Ok(OpCode::Call(Address::new(nnn))),
-        (0x3, x, _, _) => Ok(OpCode::SkipEqual(x, nn)),
-        (0x4, x, _, _) => Ok(OpCode::SkipNotEqual(x, nn)),
-        (0x5, x, y, 0) => Ok(OpCode::SkipRegistersEqual(x, y)),
-        (0x6, x, _, _) => Ok(OpCode::Load(x, nn)),
-        (0x7, x, _, _) => Ok(OpCode::Inc(x, nn)),
-        (0x8, x, y, 0) => Ok(OpCode::Set(x, y)),
-        (0x8, x, y, 1) => Ok(OpCode::Or(x, y)),
-        (0x8, x, y, 2) => Ok(OpCode::And(x, y)),
-        (0x8, x, y, 3) => Ok(OpCode::Xor(x, y)),
-        (0x8, x, y, 4) => Ok(OpCode::Add(x, y)),
-        (0x8, x, y, 5) => Ok(OpCode::Sub(x, y)),
-        (0x8, x, y, 6) => Ok(OpCode::RShift(x, y)),
-        (0x8, x, y, 7) => Ok(OpCode::InvSub(x, y)),
-        (0x8, x, y, 0xe) => Ok(OpCode::LShift(x, y)),
-        (0x9, x, y, 0) => Ok(OpCode::SkipRegistersNotEqual(x, y)),
-        (0xa, _, _, _) => Ok(OpCode::LoadIndex(Address::new(nnn))),
-        (0xb, _, _, _) => Ok(OpCode::Flow(Address::new(nnn))),
-        (0xc, x, _, _) => Ok(OpCode::Rand(x, nn)),
-        (0xd, x, y, n) => Ok(OpCode::Draw(x, y, n)),
-        (0xe, x, 9, 0xe) => Ok(OpCode::IsKey(x)),
-        (0xe, x, 0xa, 1) => Ok(OpCode::IsNotKey(x)),
-        (0xf, x, 0, 7) => Ok(OpCode::SetDelay(x)),
-        (0xf, x, 0, 0xa) => Ok(OpCode::WaitKey(x)),
-        (0xf, x, 1, 5) => Ok(OpCode::Delay(x)),
-        (0xf, x, 1, 8) => Ok(OpCode::Sound(x)),
-        (0xf, x, 1, 0xe) => Ok(OpCode::IncIndex(x)),
-        (0xf, x, 2, 9) => Ok(OpCode::Sprite(x)),
-        (0xf, x, 3, 3) => Ok(OpCode::Bcd(x)),
-        (0xf, x, 5, 5) => Ok(OpCode::Write(x)),
-        (0xf, x, 6, 5) => Ok(OpCode::Read(x)),
-        _ => Err(Error::UnknownOpCode(opcode)),
+        (0x0, 0x0, 0xe, 0x0) => Some(OpCode::Clear),
+        (0x0, 0x0, 0xe, 0xe) => Some(OpCode::Return),
+        (0x1, _, _, _) => Some(OpCode::Jump(Address::new(nnn))),
+        (0x2, _, _, _) => Some(OpCode::Call(Address::new(nnn))),
+        (0x3, x, _, _) => Some(OpCode::SkipEqual(x, nn)),
+        (0x4, x, _, _) => Some(OpCode::SkipNotEqual(x, nn)),
+        (0x5, x, y, 0) => Some(OpCode::SkipRegistersEqual(x, y)),
+        (0x6, x, _, _) => Some(OpCode::Load(x, nn)),
+        (0x7, x, _, _) => Some(OpCode::Inc(x, nn)),
+        (0x8, x, y, 0) => Some(OpCode::Set(x, y)),
+        (0x8, x, y, 1) => Some(OpCode::Or(x, y)),
+        (0x8, x, y, 2) => Some(OpCode::And(x, y)),
+        (0x8, x, y, 3) => Some(OpCode::Xor(x, y)),
+        (0x8, x, y, 4) => Some(OpCode::Add(x, y)),
+        (0x8, x, y, 5) => Some(OpCode::Sub(x, y)),
+        (0x8, x, y, 6) => Some(OpCode::RShift(x, y)),
+        (0x8, x, y, 7) => Some(OpCode::InvSub(x, y)),
+        (0x8, x, y, 0xe) => Some(OpCode::LShift(x, y)),
+        (0x9, x, y, 0) => Some(OpCode::SkipRegistersNotEqual(x, y)),
+        (0xa, _, _, _) => Some(OpCode::LoadIndex(Address::new(nnn))),
+        (0xb, _, _, _) => Some(OpCode::Flow(Address::new(nnn))),
+        (0xc, x, _, _) => Some(OpCode::Rand(x, nn)),
+        (0xd, x, y, n) => Some(OpCode::Draw(x, y, n)),
+        (0xe, x, 9, 0xe) => Some(OpCode::IsKey(x)),
+        (0xe, x, 0xa, 1) => Some(OpCode::IsNotKey(x)),
+        (0xf, x, 0, 7) => Some(OpCode::SetDelay(x)),
+        (0xf, x, 0, 0xa) => Some(OpCode::WaitKey(x)),
+        (0xf, x, 1, 5) => Some(OpCode::Delay(x)),
+        (0xf, x, 1, 8) => Some(OpCode::Sound(x)),
+        (0xf, x, 1, 0xe) => Some(OpCode::IncIndex(x)),
+        (0xf, x, 2, 9) => Some(OpCode::Sprite(x)),
+        (0xf, x, 3, 3) => Some(OpCode::Bcd(x)),
+        (0xf, x, 5, 5) => Some(OpCode::Write(x)),
+        (0xf, x, 6, 5) => Some(OpCode::Read(x)),
+        _ => None,
     }
+}
+
+fn decode(opcode: u16) -> Result<OpCode, Error> {
+    opcode_match(opcode_split(opcode)).ok_or(Error::UnknownOpCode(opcode))
 }
 
 #[cfg(test)]
@@ -434,6 +442,41 @@ mod decode_tests {
     fn decode_read() {
         assert_eq!(decode(0xf365), Ok(OpCode::Read(0x3)));
         assert_eq!(decode(0xf565), Ok(OpCode::Read(0x5)));
+    }
+}
+
+#[derive(PartialEq, Debug)]
+enum SuperOpCode {
+    Chip8(OpCode),
+}
+
+fn super_opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<SuperOpCode> {
+    match nibbles {
+        _ => opcode_match((nibbles, nn, nnn)).map(SuperOpCode::Chip8),
+    }
+}
+
+fn super_decode(opcode: u16) -> Result<SuperOpCode, Error> {
+    super_opcode_match(opcode_split(opcode)).ok_or(Error::UnknownOpCode(opcode))
+}
+
+#[cfg(test)]
+mod super_decode_tests {
+    use super::*;
+
+    #[test]
+    fn super_decode_unknown_opcode() {
+        assert_eq!(super_decode(0x9999), Err(Error::UnknownOpCode(0x9999)));
+        assert_eq!(super_decode(0x0fff), Err(Error::UnknownOpCode(0x0fff)));
+    }
+
+    #[test]
+    fn super_decode_classic_opcode() {
+        assert_eq!(super_decode(0x00e0), Ok(SuperOpCode::Chip8(OpCode::Clear)));
+        assert_eq!(
+            super_decode(0x51c0),
+            Ok(SuperOpCode::Chip8(OpCode::SkipRegistersEqual(1, 0xc)))
+        );
     }
 }
 
@@ -827,6 +870,17 @@ impl Cpu {
         }
     }
 
+    fn super_execute<P: Memory + Display + Keypad, R: Rng>(
+        &mut self,
+        peripheral: &mut P,
+        rng: &R,
+        opcode: SuperOpCode,
+    ) {
+        match opcode {
+            SuperOpCode::Chip8(opcode) => self.execute(peripheral, rng, opcode),
+        }
+    }
+
     pub fn step<P: Memory + Display + Keypad, R: Rng>(
         &mut self,
         peripheral: &mut P,
@@ -838,6 +892,21 @@ impl Cpu {
         self.pc = self.pc.wrapping_add(2);
 
         self.execute(peripheral, rng, opcode);
+
+        Ok(())
+    }
+
+    pub fn super_step<P: Memory + Display + Keypad, R: Rng>(
+        &mut self,
+        peripheral: &mut P,
+        rng: &R,
+    ) -> Result<(), crate::Error> {
+        let opcode = fetch(peripheral, self.pc);
+        let opcode = super_decode(opcode)?;
+
+        self.pc = self.pc.wrapping_add(2);
+
+        self.super_execute(peripheral, rng, opcode);
 
         Ok(())
     }
