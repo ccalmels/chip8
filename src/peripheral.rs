@@ -2,8 +2,10 @@ use crate::ca555::Ca555;
 use crate::cd4515::Cd4515;
 use crate::cpu::{Address, Display, Keypad, Memory};
 
+const PIXEL_PER_U8: usize = 8;
 pub const WIDTH: u8 = 64;
 pub const HEIGHT: u8 = 32;
+const WIDTH_IN_U8: usize = WIDTH as usize / PIXEL_PER_U8;
 pub const FRAMEBUFFER_START: usize = 0xf00;
 pub const FRAMEBUFFER_END: usize = 0x1000;
 pub const MEMORY_LENGTH: usize = 0x1000;
@@ -56,10 +58,10 @@ impl Display for Peripheral {
     }
 
     fn draw(&mut self, x: u8, y: u8, sprite: &[u8]) -> bool {
-        let x = x % WIDTH;
+        let x = (x % WIDTH) as usize;
         let y = (y % HEIGHT) as usize;
-        let x_index = (x / 8) as usize;
-        let x_bits = x % 8;
+        let x_index = x / PIXEL_PER_U8;
+        let x_bits = x % PIXEL_PER_U8;
         let mut ret = false;
 
         for (n, &s) in sprite.iter().enumerate() {
@@ -69,12 +71,12 @@ impl Display for Peripheral {
                 break;
             }
 
-            let index = row * 8 + x_index;
+            let index = row * WIDTH_IN_U8 + x_index;
 
             ret |= self.draw_one(index, s >> x_bits);
 
-            if x_bits != 0 && x_index < (WIDTH / 8) as usize - 1 {
-                ret |= self.draw_one(index + 1, s << (8 - x_bits));
+            if x_bits != 0 && x_index < WIDTH_IN_U8 - 1 {
+                ret |= self.draw_one(index + 1, s << (PIXEL_PER_U8 - x_bits));
             }
         }
 
