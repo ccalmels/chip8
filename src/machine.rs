@@ -85,7 +85,7 @@ impl Chip8 {
             memory.resize(MEMORY_LENGTH, 0);
 
             let component = Component {
-                cpu: Cpu::new(),
+                cpu: Cpu::new(!is_superchip),
                 peripheral: Peripheral::new(memory.try_into().unwrap()),
                 rng: Random(),
             };

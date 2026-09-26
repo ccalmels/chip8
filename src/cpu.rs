@@ -469,9 +469,124 @@ mod fetch_tests {
     }
 }
 
+#[derive(Debug, PartialEq)]
+enum Stack {
+    Memory(Address),
+    Internal(Vec<Address>),
+}
+
+impl Stack {
+    fn push<M: Memory>(&mut self, memory: &mut M, address: Address) {
+        match self {
+            Stack::Memory(sp) => {
+                let (high, low) = ((address.value() >> 8) as u8, (address.value() & 0xff) as u8);
+
+                memory.write(*sp, high);
+                *sp = sp.wrapping_sub(1);
+
+                memory.write(*sp, low);
+                *sp = sp.wrapping_sub(1);
+            }
+            Stack::Internal(stack) => stack.push(address),
+        }
+    }
+
+    fn pop<M: Memory>(&mut self, memory: &M) -> Address {
+        match self {
+            Stack::Memory(sp) => {
+                *sp = sp.wrapping_add(1);
+                let low = memory.read(*sp);
+
+                *sp = sp.wrapping_add(1);
+                let high = memory.read(*sp);
+
+                Address::new((high as u16) << 8 | low as u16)
+            }
+            Stack::Internal(stack) => stack.pop().unwrap_or(Address::new(0)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod stack_tests {
+    use super::*;
+
+    struct MockMemory([u8; 8]);
+
+    impl Memory for MockMemory {
+        fn read(&self, address: Address) -> u8 {
+            self.0[address.value() as usize]
+        }
+
+        fn write(&mut self, address: Address, value: u8) {
+            self.0[address.value() as usize] = value;
+        }
+    }
+
+    #[test]
+    fn push_pop_stack_memory() {
+        let mut stack = Stack::Memory(Address::new(7));
+        let mut memory = MockMemory([0; 8]);
+
+        let expected = [0, 0, 0, 0, 0x23, 0x1, 0xbc, 0xa];
+
+        stack.push(&mut memory, Address::new(0xabc));
+        assert_eq!(stack, Stack::Memory(Address::new(5)));
+        stack.push(&mut memory, Address::new(0x123));
+        assert_eq!(stack, Stack::Memory(Address::new(3)));
+
+        assert_eq!(memory.0, expected);
+
+        let expected = [0, 0, 0, 0, 0x54, 0x6, 0xbc, 0xa];
+
+        assert_eq!(stack.pop(&memory), Address::new(0x123));
+        assert_eq!(stack, Stack::Memory(Address::new(5)));
+
+        stack.push(&mut memory, Address::new(0x654));
+        assert_eq!(memory.0, expected);
+        assert_eq!(stack, Stack::Memory(Address::new(3)));
+
+        assert_eq!(stack.pop(&memory), Address::new(0x654));
+        assert_eq!(stack, Stack::Memory(Address::new(5)));
+        assert_eq!(stack.pop(&memory), Address::new(0xabc));
+        assert_eq!(stack, Stack::Memory(Address::new(7)));
+    }
+
+    #[test]
+    fn push_pop_stack_internal() {
+        let mut stack = Stack::Internal(vec![]);
+        let mut memory = MockMemory([0; 8]);
+
+        stack.push(&mut memory, Address::new(0xabc));
+        assert_eq!(stack, Stack::Internal(vec![Address::new(0xabc)]));
+
+        stack.push(&mut memory, Address::new(0x123));
+        assert_eq!(
+            stack,
+            Stack::Internal(vec![Address::new(0xabc), Address::new(0x123)])
+        );
+
+        assert_eq!(stack.pop(&memory), Address::new(0x123));
+        assert_eq!(stack, Stack::Internal(vec![Address::new(0xabc)]));
+
+        stack.push(&mut memory, Address::new(0x654));
+
+        assert_eq!(
+            stack,
+            Stack::Internal(vec![Address::new(0xabc), Address::new(0x654)])
+        );
+
+        assert_eq!(stack.pop(&memory), Address::new(0x654));
+        assert_eq!(stack, Stack::Internal(vec![Address::new(0xabc)]));
+
+        assert_eq!(stack.pop(&memory), Address::new(0xabc));
+        assert_eq!(stack, Stack::Internal(vec![]));
+    }
+}
+
 pub struct Cpu {
     pc: Address,
-    sp: Address,
+    stack: Stack,
     i: Address,
     vs: Registers,
     dt: u8, // delay timer
@@ -483,35 +598,19 @@ impl Cpu {
     pub const FONTS: Address = Address::new(0x050);
     const SP: Address = Address::new(0xeff);
 
-    pub fn new() -> Self {
+    pub fn new(stack_in_memory: bool) -> Self {
         Cpu {
             pc: Cpu::START_PC,
-            sp: Cpu::SP,
+            stack: if stack_in_memory {
+                Stack::Memory(Self::SP)
+            } else {
+                Stack::Internal(vec![])
+            },
             i: Address::new(0),
             vs: Registers([0; 16]),
             dt: 0,
             st: 0,
         }
-    }
-
-    fn push<M: Memory>(&mut self, memory: &mut M, address: Address) {
-        let (high, low) = ((address.value() >> 8) as u8, (address.value() & 0xff) as u8);
-
-        memory.write(self.sp, high);
-        self.sp = self.sp.wrapping_sub(1);
-
-        memory.write(self.sp, low);
-        self.sp = self.sp.wrapping_sub(1);
-    }
-
-    fn pop<M: Memory>(&mut self, memory: &M) -> Address {
-        self.sp = self.sp.wrapping_add(1);
-        let low = memory.read(self.sp);
-
-        self.sp = self.sp.wrapping_add(1);
-        let high = memory.read(self.sp);
-
-        Address::new((high as u16) << 8 | low as u16)
     }
 
     pub fn tick_timer<B: Beeper>(&mut self, beeper: &B) {
@@ -534,10 +633,10 @@ impl Cpu {
     ) {
         match opcode {
             OpCode::Clear => peripheral.clear(),
-            OpCode::Return => self.pc = self.pop(peripheral),
+            OpCode::Return => self.pc = self.stack.pop(peripheral),
             OpCode::Jump(address) => self.pc = address,
             OpCode::Call(address) => {
-                self.push(peripheral, self.pc);
+                self.stack.push(peripheral, self.pc);
                 self.pc = address
             }
             OpCode::SkipEqual(v, value) => {
@@ -679,60 +778,7 @@ impl Cpu {
 
 impl Default for Cpu {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(test)]
-mod cpu_tests {
-    use super::*;
-
-    struct MockMemory([u8; 8]);
-
-    impl Memory for MockMemory {
-        fn read(&self, address: Address) -> u8 {
-            self.0[address.value() as usize]
-        }
-
-        fn write(&mut self, address: Address, value: u8) {
-            self.0[address.value() as usize] = value;
-        }
-    }
-
-    #[test]
-    fn push_pop_stack() {
-        let mut cpu = Cpu {
-            pc: Address::new(0x0),
-            sp: Address::new(0x7),
-            i: Address::new(0),
-            vs: Registers([0; 16]),
-            dt: 0,
-            st: 0,
-        };
-        let mut memory = MockMemory([0; 8]);
-
-        let expected = [0, 0, 0, 0, 0x23, 0x1, 0xbc, 0xa];
-
-        cpu.push(&mut memory, Address::new(0xabc));
-        assert_eq!(cpu.sp, Address::new(5));
-        cpu.push(&mut memory, Address::new(0x123));
-        assert_eq!(cpu.sp, Address::new(3));
-
-        assert_eq!(memory.0, expected);
-
-        let expected = [0, 0, 0, 0, 0x54, 0x6, 0xbc, 0xa];
-
-        assert_eq!(cpu.pop(&memory), Address::new(0x123));
-        assert_eq!(cpu.sp, Address::new(5));
-
-        cpu.push(&mut memory, Address::new(0x654));
-        assert_eq!(memory.0, expected);
-        assert_eq!(cpu.sp, Address::new(3));
-
-        assert_eq!(cpu.pop(&memory), Address::new(0x654));
-        assert_eq!(cpu.sp, Address::new(5));
-        assert_eq!(cpu.pop(&memory), Address::new(0xabc));
-        assert_eq!(cpu.sp, Address::new(7));
+        Self::new(true)
     }
 }
 
@@ -803,7 +849,7 @@ mod execute_tests {
 
     #[test]
     fn execute_rand() {
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::default();
         let mut p = MockPeripheral::new();
         let rng = FixedRng(0xff);
 
