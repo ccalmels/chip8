@@ -27,11 +27,14 @@ impl Peripheral {
         &self.memory[FRAMEBUFFER_START..FRAMEBUFFER_END]
     }
 
-    fn draw_one(&mut self, index: usize, s: u8) -> bool {
-        let index = index + FRAMEBUFFER_START;
-        let ret = self.memory[index] & s != 0x0;
+    fn framebuffer_mut(&mut self) -> &mut [u8] {
+        &mut self.memory[FRAMEBUFFER_START..FRAMEBUFFER_END]
+    }
 
-        self.memory[index] ^= s;
+    fn draw_one(&mut self, index: usize, s: u8) -> bool {
+        let ret = self.framebuffer()[index] & s != 0x0;
+
+        self.framebuffer_mut()[index] ^= s;
 
         ret
     }
@@ -49,7 +52,7 @@ impl Memory for Peripheral {
 
 impl Display for Peripheral {
     fn clear(&mut self) {
-        self.memory[FRAMEBUFFER_START..FRAMEBUFFER_END].fill(0);
+        self.framebuffer_mut().fill(0);
     }
 
     fn draw(&mut self, x: u8, y: u8, sprite: &[u8]) -> bool {
