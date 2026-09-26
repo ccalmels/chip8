@@ -584,6 +584,33 @@ mod stack_tests {
     }
 }
 
+pub struct Quirks {
+    vf_reset: bool,
+    memory: bool,
+    shifting: bool,
+    jumping: bool,
+}
+
+impl Quirks {
+    pub fn classic() -> Self {
+        Self {
+            vf_reset: true,
+            memory: true,
+            shifting: false,
+            jumping: false,
+        }
+    }
+
+    pub fn schip() -> Self {
+        Self {
+            vf_reset: false,
+            memory: false,
+            shifting: true,
+            jumping: true,
+        }
+    }
+}
+
 pub struct Cpu {
     pc: Address,
     stack: Stack,
@@ -591,6 +618,7 @@ pub struct Cpu {
     vs: Registers,
     dt: u8, // delay timer
     st: u8, // sound timer
+    quirks: Quirks,
 }
 
 impl Cpu {
@@ -598,7 +626,7 @@ impl Cpu {
     pub const FONTS: Address = Address::new(0x050);
     const SP: Address = Address::new(0xeff);
 
-    pub fn new(stack_in_memory: bool) -> Self {
+    pub fn new(stack_in_memory: bool, quirks: Quirks) -> Self {
         Cpu {
             pc: Cpu::START_PC,
             stack: if stack_in_memory {
@@ -610,6 +638,7 @@ impl Cpu {
             vs: Registers([0; 16]),
             dt: 0,
             st: 0,
+            quirks,
         }
     }
 
@@ -659,15 +688,21 @@ impl Cpu {
             OpCode::Set(x, y) => self.vs[x] = self.vs[y],
             OpCode::Or(x, y) => {
                 self.vs[x] |= self.vs[y];
-                self.vs[0xf] = 0
+                if self.quirks.vf_reset {
+                    self.vs[0xf] = 0
+                }
             }
             OpCode::And(x, y) => {
                 self.vs[x] &= self.vs[y];
-                self.vs[0xf] = 0
+                if self.quirks.vf_reset {
+                    self.vs[0xf] = 0
+                }
             }
             OpCode::Xor(x, y) => {
                 self.vs[x] ^= self.vs[y];
-                self.vs[0xf] = 0
+                if self.quirks.vf_reset {
+                    self.vs[0xf] = 0
+                }
             }
             OpCode::Add(x, y) => {
                 let (res, overflowed) = self.vs[x].overflowing_add(self.vs[y]);
@@ -681,7 +716,13 @@ impl Cpu {
             }
             OpCode::RShift(x, y) => {
                 let lsb = self.vs[y] & 0x1;
-                self.vs[x] = self.vs[y] >> 1;
+
+                if self.quirks.shifting {
+                    self.vs[x] >>= 1;
+                } else {
+                    self.vs[x] = self.vs[y] >> 1;
+                }
+
                 self.vs[0xf] = lsb;
             }
             OpCode::InvSub(x, y) => {
@@ -691,7 +732,13 @@ impl Cpu {
             }
             OpCode::LShift(x, y) => {
                 let msb = self.vs[y] >> 7;
-                self.vs[x] = self.vs[y] << 1;
+
+                if self.quirks.shifting {
+                    self.vs[x] <<= 1;
+                } else {
+                    self.vs[x] = self.vs[y] << 1;
+                }
+
                 self.vs[0xf] = msb;
             }
             OpCode::SkipRegistersNotEqual(x, y) => {
@@ -700,7 +747,15 @@ impl Cpu {
                 }
             }
             OpCode::LoadIndex(addr) => self.i = addr,
-            OpCode::Flow(addr) => self.pc = addr.wrapping_add(self.vs[0] as u16),
+            OpCode::Flow(addr) => {
+                if self.quirks.jumping {
+                    let x = (addr.value() >> 8) as u8;
+
+                    self.pc = addr.wrapping_add(self.vs[x] as u16)
+                } else {
+                    self.pc = addr.wrapping_add(self.vs[0] as u16)
+                }
+            }
             OpCode::Rand(x, nn) => self.vs[x] = rng.next() & nn,
             OpCode::Draw(x, y, n) => {
                 let mut sprite = [0u8; 15];
@@ -746,15 +801,27 @@ impl Cpu {
                 peripheral.write(destination, c);
             }
             OpCode::Write(x) => {
+                let mut dest = self.i;
+
                 for i in 0..=x {
-                    peripheral.write(self.i, self.vs[i]);
-                    self.i = self.i.wrapping_add(1);
+                    peripheral.write(dest, self.vs[i]);
+                    dest = dest.wrapping_add(1);
+                }
+
+                if self.quirks.memory {
+                    self.i = dest;
                 }
             }
             OpCode::Read(x) => {
+                let mut src = self.i;
+
                 for i in 0..=x {
-                    self.vs[i] = peripheral.read(self.i);
-                    self.i = self.i.wrapping_add(1);
+                    self.vs[i] = peripheral.read(src);
+                    src = src.wrapping_add(1);
+                }
+
+                if self.quirks.memory {
+                    self.i = src;
                 }
             }
         }
@@ -778,7 +845,7 @@ impl Cpu {
 
 impl Default for Cpu {
     fn default() -> Self {
-        Self::new(true)
+        Self::new(true, Quirks::classic())
     }
 }
 

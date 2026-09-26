@@ -1,5 +1,5 @@
 use crate::Error;
-use crate::cpu::{Cpu, Rng};
+use crate::cpu::{Cpu, Quirks, Rng};
 use crate::peripheral::{HEIGHT, MEMORY_LENGTH, Peripheral, WIDTH};
 use crate::ticker::{Tickable, Ticker};
 use crate::windowing::{KeyListener, Renderable, Updatable};
@@ -84,8 +84,14 @@ impl Chip8 {
             memory.extend_from_slice(rom);
             memory.resize(MEMORY_LENGTH, 0);
 
+            let quirks = if is_superchip {
+                Quirks::schip()
+            } else {
+                Quirks::classic()
+            };
+
             let component = Component {
-                cpu: Cpu::new(!is_superchip),
+                cpu: Cpu::new(!is_superchip, quirks),
                 peripheral: Peripheral::new(!is_superchip, memory.try_into().unwrap()),
                 rng: Random(),
             };
