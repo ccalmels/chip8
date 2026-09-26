@@ -86,7 +86,7 @@ impl Chip8 {
 
             let component = Component {
                 cpu: Cpu::new(!is_superchip),
-                peripheral: Peripheral::new(memory.try_into().unwrap()),
+                peripheral: Peripheral::new(!is_superchip, memory.try_into().unwrap()),
                 rng: Random(),
             };
             let ticker = Ticker::new();
