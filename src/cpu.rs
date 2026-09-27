@@ -460,6 +460,7 @@ enum SuperOpCode {
     LowRes,
     HiRes,
     Draw16(u8, u8),
+    HiSprite(u8),
     Store(u8),
     Load(u8),
     Chip8(OpCode),
@@ -472,6 +473,7 @@ fn super_opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option
         (0x0, 0x0, 0xf, 0xc) => Some(SuperOpCode::ScrollLeft),
         (0x0, 0x0, 0xf, 0xe) => Some(SuperOpCode::LowRes),
         (0x0, 0x0, 0xf, 0xf) => Some(SuperOpCode::HiRes),
+        (0xf, x, 3, 0) => Some(SuperOpCode::HiSprite(x)),
         (0xf, x, 7, 5) => Some(SuperOpCode::Store(x)),
         (0xf, x, 8, 5) => Some(SuperOpCode::Load(x)),
         (0xd, x, y, 0) => Some(SuperOpCode::Draw16(x, y)),
@@ -528,6 +530,12 @@ mod super_decode_tests {
     fn super_decode_draw16() {
         assert_eq!(super_decode(0xd1c0), Ok(SuperOpCode::Draw16(1, 0xc)));
         assert_eq!(super_decode(0xda30), Ok(SuperOpCode::Draw16(0xa, 3)));
+    }
+
+    #[test]
+    fn super_decode_hisprite() {
+        assert_eq!(super_decode(0xf230), Ok(SuperOpCode::HiSprite(2)));
+        assert_eq!(super_decode(0xfa30), Ok(SuperOpCode::HiSprite(0xa)));
     }
 
     #[test]
@@ -731,6 +739,8 @@ pub struct Cpu {
 impl Cpu {
     pub const START_PC: Address = Address::new(0x200);
     pub const FONTS: Address = Address::new(0x050);
+    const FONTS_SIZE: u16 = 0x50;
+    const HI_FONTS: Address = Address::new(0x050 + Self::FONTS_SIZE);
     const SP: Address = Address::new(0xeff);
 
     pub fn new(stack_in_memory: bool, quirks: Quirks) -> Self {
@@ -961,6 +971,9 @@ impl Cpu {
                 }
 
                 self.vs[0xf] |= peripheral.draw(self.vs[x] + 8, self.vs[y], &sprite) as u8;
+            }
+            SuperOpCode::HiSprite(x) => {
+                self.i = Self::HI_FONTS.wrapping_add((self.vs[x] as u16 & 0xf) * 10)
             }
             SuperOpCode::Store(x) => {
                 for i in 0..=x {
