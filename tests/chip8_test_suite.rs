@@ -93,3 +93,25 @@ fn keypad() {
 
     assert_eq!(chip8.framebuffer(), expected);
 }
+
+#[test]
+fn scroll_hires() {
+    let expected = include_bytes!("fixtures/8-scrolling.hires.expected");
+    let mut chip8 =
+        Chip8::from_rom_with_quirk(true, include_bytes!("fixtures/8-scrolling.ch8"), 3).unwrap();
+
+    chip8.update(Duration::from_secs(1)).unwrap();
+
+    assert_eq!(chip8.framebuffer(), expected);
+}
+
+#[test]
+fn scroll_lowres() {
+    let expected = include_bytes!("fixtures/8-scrolling.lowres.expected");
+    let mut chip8 =
+        Chip8::from_rom_with_quirk(true, include_bytes!("fixtures/8-scrolling.ch8"), 1).unwrap();
+
+    chip8.update(Duration::from_secs(1)).unwrap();
+
+    assert_eq!(chip8.framebuffer(), expected);
+}
