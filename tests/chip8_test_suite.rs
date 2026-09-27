@@ -69,6 +69,17 @@ fn quirks() {
 }
 
 #[test]
+fn quirks_superchip() {
+    let expected = include_bytes!("fixtures/5-quirks.superchip.expected");
+    let mut chip8 =
+        Chip8::from_rom_with_quirk(true, include_bytes!("fixtures/5-quirks.ch8"), 2).unwrap();
+
+    chip8.update(Duration::from_secs(5)).unwrap();
+
+    assert_eq!(chip8.framebuffer(), expected);
+}
+
+#[test]
 fn keypad() {
     let expected = include_bytes!("fixtures/6-keypad.expected");
     let mut chip8 =
