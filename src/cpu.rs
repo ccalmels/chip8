@@ -453,6 +453,7 @@ mod decode_tests {
 enum SuperOpCode {
     LowRes,
     HiRes,
+    Draw16(u8, u8),
     Chip8(OpCode),
 }
 
@@ -460,6 +461,7 @@ fn super_opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option
     match nibbles {
         (0x0, 0x0, 0xf, 0xe) => Some(SuperOpCode::LowRes),
         (0x0, 0x0, 0xf, 0xf) => Some(SuperOpCode::HiRes),
+        (0xd, x, y, 0) => Some(SuperOpCode::Draw16(x, y)),
         _ => opcode_match((nibbles, nn, nnn)).map(SuperOpCode::Chip8),
     }
 }
@@ -491,6 +493,12 @@ mod super_decode_tests {
     fn super_decode_hires_lowres() {
         assert_eq!(super_decode(0x00fe), Ok(SuperOpCode::LowRes));
         assert_eq!(super_decode(0x00ff), Ok(SuperOpCode::HiRes));
+    }
+
+    #[test]
+    fn super_decode_draw16() {
+        assert_eq!(super_decode(0xd1c0), Ok(SuperOpCode::Draw16(1, 0xc)));
+        assert_eq!(super_decode(0xda30), Ok(SuperOpCode::Draw16(0xa, 3)));
     }
 }
 
@@ -893,6 +901,21 @@ impl Cpu {
         match opcode {
             SuperOpCode::LowRes => peripheral.switch_resolution(false),
             SuperOpCode::HiRes => peripheral.switch_resolution(true),
+            SuperOpCode::Draw16(x, y) => {
+                let mut sprite = [0u8; 16];
+
+                for (row, byte) in sprite.iter_mut().enumerate() {
+                    *byte = peripheral.read(self.i.wrapping_add(2 * row as u16));
+                }
+
+                self.vs[0xf] = peripheral.draw(self.vs[x], self.vs[y], &sprite) as u8;
+
+                for (row, byte) in sprite.iter_mut().enumerate() {
+                    *byte = peripheral.read(self.i.wrapping_add(1 + 2 * row as u16));
+                }
+
+                self.vs[0xf] |= peripheral.draw(self.vs[x] + 8, self.vs[y], &sprite) as u8;
+            }
             SuperOpCode::Chip8(opcode) => self.execute(peripheral, rng, opcode),
         }
     }
