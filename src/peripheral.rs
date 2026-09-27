@@ -145,6 +145,38 @@ impl Keypad for Peripheral {
     }
 }
 
+fn scroll_line_right<const N: usize>(line: &mut [u8; N]) {
+    let mut rest = 0;
+
+    for element in line.iter_mut() {
+        let next = (*element & 0xf) << 4;
+
+        *element = rest | *element >> 4;
+
+        rest = next;
+    }
+}
+
+fn scroll_line_left<const N: usize>(line: &mut [u8; N]) {
+    let mut rest = 0;
+
+    for element in line.iter_mut().rev() {
+        let next = (*element & 0xf0) >> 4;
+
+        *element = rest | *element << 4;
+
+        rest = next;
+    }
+}
+
+fn scroll<const N: usize, F: Fn(&mut [u8; N])>(framebuffer: &mut [u8], f: F) {
+    let (chunks, _remainder) = framebuffer.as_chunks_mut::<N>();
+
+    for line in chunks {
+        f(line);
+    }
+}
+
 impl SuperDisplay for Peripheral {
     fn switch_resolution(&mut self, hi_res: bool) {
         if let Some(fb) = &mut self.framebuffer {
@@ -164,7 +196,26 @@ impl SuperDisplay for Peripheral {
 
         framebuffer.copy_within(..framebuffer.len() - to_scroll, to_scroll);
         framebuffer[..to_scroll].fill(0);
+    }
 
+    fn scroll_right(&mut self) {
+        if let Some(fb) = &self.framebuffer
+            && fb.is_hi_res
+        {
+            scroll::<{ WIDTH_IN_U8 * 2 }, _>(self.framebuffer_mut(), scroll_line_right);
+        } else {
+            scroll::<WIDTH_IN_U8, _>(self.framebuffer_mut(), scroll_line_right);
+        }
+    }
+
+    fn scroll_left(&mut self) {
+        if let Some(fb) = &self.framebuffer
+            && fb.is_hi_res
+        {
+            scroll::<{ WIDTH_IN_U8 * 2 }, _>(self.framebuffer_mut(), scroll_line_left);
+        } else {
+            scroll::<WIDTH_IN_U8, _>(self.framebuffer_mut(), scroll_line_left);
+        }
     }
 }
 
