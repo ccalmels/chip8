@@ -1,17 +1,40 @@
 use crate::ca555::Ca555;
 use crate::cd4515::Cd4515;
-use crate::cpu::{Address, Display, Keypad, Memory};
+use crate::cpu::{Address, Display, Keypad, Memory, SuperDisplay};
 
 const PIXEL_PER_U8: usize = 8;
 pub const WIDTH: u8 = 64;
 pub const HEIGHT: u8 = 32;
 const WIDTH_IN_U8: usize = WIDTH as usize / PIXEL_PER_U8;
-const FRAMEBUFFER_SIZE: usize = WIDTH_IN_U8 * HEIGHT as usize;
+pub const FRAMEBUFFER_SIZE: usize = WIDTH_IN_U8 * HEIGHT as usize;
+const HIRES_FRAMEBUFFER_SIZE: usize = FRAMEBUFFER_SIZE * 4;
+
 pub const FRAMEBUFFER_START: usize = 0xf00;
 pub const FRAMEBUFFER_END: usize = 0x1000;
 pub const MEMORY_LENGTH: usize = 0x1000;
 
-struct InternalFrameBuffer([u8; FRAMEBUFFER_SIZE]);
+struct InternalFrameBuffer {
+    data: [u8; HIRES_FRAMEBUFFER_SIZE],
+    is_hi_res: bool,
+}
+
+impl InternalFrameBuffer {
+    fn get(&self) -> &[u8] {
+        if self.is_hi_res {
+            &self.data
+        } else {
+            &self.data[..FRAMEBUFFER_SIZE]
+        }
+    }
+
+    fn get_mut(&mut self) -> &mut [u8] {
+        if self.is_hi_res {
+            &mut self.data
+        } else {
+            &mut self.data[..FRAMEBUFFER_SIZE]
+        }
+    }
+}
 
 pub struct Peripheral {
     memory: [u8; MEMORY_LENGTH],
@@ -29,14 +52,17 @@ impl Peripheral {
             framebuffer: if framebuffer_in_memory {
                 None
             } else {
-                Some(InternalFrameBuffer([0; FRAMEBUFFER_SIZE]))
+                Some(InternalFrameBuffer {
+                    data: [0; HIRES_FRAMEBUFFER_SIZE],
+                    is_hi_res: false,
+                })
             },
         }
     }
 
     pub fn framebuffer(&self) -> &[u8] {
         if let Some(fb) = &self.framebuffer {
-            &fb.0
+            fb.get()
         } else {
             &self.memory[FRAMEBUFFER_START..FRAMEBUFFER_END]
         }
@@ -44,7 +70,7 @@ impl Peripheral {
 
     fn framebuffer_mut(&mut self) -> &mut [u8] {
         if let Some(fb) = &mut self.framebuffer {
-            &mut fb.0
+            fb.get_mut()
         } else {
             &mut self.memory[FRAMEBUFFER_START..FRAMEBUFFER_END]
         }
@@ -75,8 +101,16 @@ impl Display for Peripheral {
     }
 
     fn draw(&mut self, x: u8, y: u8, sprite: &[u8]) -> bool {
-        let x = (x % WIDTH) as usize;
-        let y = (y % HEIGHT) as usize;
+        let (width, height, width_in_u8) = if let Some(fb) = &self.framebuffer
+            && fb.is_hi_res
+        {
+            (WIDTH * 2, HEIGHT * 2, WIDTH_IN_U8 * 2)
+        } else {
+            (WIDTH, HEIGHT, WIDTH_IN_U8)
+        };
+
+        let x = (x % width) as usize;
+        let y = (y % height) as usize;
         let x_index = x / PIXEL_PER_U8;
         let x_bits = x % PIXEL_PER_U8;
         let mut ret = false;
@@ -84,15 +118,15 @@ impl Display for Peripheral {
         for (n, &s) in sprite.iter().enumerate() {
             let row = y + n;
 
-            if row >= HEIGHT as usize {
+            if row >= height as usize {
                 break;
             }
 
-            let index = row * WIDTH_IN_U8 + x_index;
+            let index = row * width_in_u8 + x_index;
 
             ret |= self.draw_one(index, s >> x_bits);
 
-            if x_bits != 0 && x_index < WIDTH_IN_U8 - 1 {
+            if x_bits != 0 && x_index < width_in_u8 - 1 {
                 ret |= self.draw_one(index + 1, s << (PIXEL_PER_U8 - x_bits));
             }
         }
@@ -108,6 +142,14 @@ impl Keypad for Peripheral {
 
     fn wait_key(&mut self) -> Option<u8> {
         self.keypad.wait_key()
+    }
+}
+
+impl SuperDisplay for Peripheral {
+    fn switch_resolution(&mut self, hi_res: bool) {
+        if let Some(fb) = &mut self.framebuffer {
+            fb.is_hi_res = hi_res;
+        }
     }
 }
 

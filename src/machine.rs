@@ -1,6 +1,6 @@
 use crate::Error;
 use crate::cpu::{Cpu, Quirks, Rng};
-use crate::peripheral::{HEIGHT, MEMORY_LENGTH, Peripheral, WIDTH};
+use crate::peripheral::{FRAMEBUFFER_SIZE, HEIGHT, MEMORY_LENGTH, Peripheral, WIDTH};
 use crate::ticker::{Tickable, Ticker};
 use crate::windowing::{KeyListener, Renderable, Updatable};
 
@@ -141,10 +141,21 @@ impl Renderable for Chip8 {
     const HEIGHT: u32 = HEIGHT as u32;
 
     fn render(&self, pixels: &mut Pixels<'_>) {
+        let framebuffer = self.framebuffer();
+
+        // We can resize every time because if it's equal it's a noop function
+        if framebuffer.len() == FRAMEBUFFER_SIZE {
+            pixels.resize_buffer(Self::WIDTH, Self::HEIGHT).unwrap();
+        } else {
+            pixels
+                .resize_buffer(Self::WIDTH * 2, Self::HEIGHT * 2)
+                .unwrap();
+        }
+
         let (chunks, _remainders) = pixels.frame_mut().as_chunks_mut::<4>();
 
         for (i, pixel) in chunks.iter_mut().enumerate() {
-            pixel.copy_from_slice(&pixel_color(self.framebuffer(), i));
+            pixel.copy_from_slice(&pixel_color(framebuffer, i));
         }
     }
 }

@@ -149,6 +149,10 @@ pub trait Rng {
     fn next(&self) -> u8;
 }
 
+pub trait SuperDisplay {
+    fn switch_resolution(&mut self, hi_res: bool);
+}
+
 fn opcode_split(opcode: u16) -> ((u8, u8, u8, u8), u8, u16) {
     let nibbles = (
         (opcode >> 12) as u8,
@@ -447,11 +451,15 @@ mod decode_tests {
 
 #[derive(PartialEq, Debug)]
 enum SuperOpCode {
+    LowRes,
+    HiRes,
     Chip8(OpCode),
 }
 
 fn super_opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<SuperOpCode> {
     match nibbles {
+        (0x0, 0x0, 0xf, 0xe) => Some(SuperOpCode::LowRes),
+        (0x0, 0x0, 0xf, 0xf) => Some(SuperOpCode::HiRes),
         _ => opcode_match((nibbles, nn, nnn)).map(SuperOpCode::Chip8),
     }
 }
@@ -477,6 +485,12 @@ mod super_decode_tests {
             super_decode(0x51c0),
             Ok(SuperOpCode::Chip8(OpCode::SkipRegistersEqual(1, 0xc)))
         );
+    }
+
+    #[test]
+    fn super_decode_hires_lowres() {
+        assert_eq!(super_decode(0x00fe), Ok(SuperOpCode::LowRes));
+        assert_eq!(super_decode(0x00ff), Ok(SuperOpCode::HiRes));
     }
 }
 
@@ -870,13 +884,15 @@ impl Cpu {
         }
     }
 
-    fn super_execute<P: Memory + Display + Keypad, R: Rng>(
+    fn super_execute<P: Memory + Display + Keypad + SuperDisplay, R: Rng>(
         &mut self,
         peripheral: &mut P,
         rng: &R,
         opcode: SuperOpCode,
     ) {
         match opcode {
+            SuperOpCode::LowRes => peripheral.switch_resolution(false),
+            SuperOpCode::HiRes => peripheral.switch_resolution(true),
             SuperOpCode::Chip8(opcode) => self.execute(peripheral, rng, opcode),
         }
     }
@@ -896,7 +912,7 @@ impl Cpu {
         Ok(())
     }
 
-    pub fn super_step<P: Memory + Display + Keypad, R: Rng>(
+    pub fn super_step<P: Memory + Display + Keypad + SuperDisplay, R: Rng>(
         &mut self,
         peripheral: &mut P,
         rng: &R,
