@@ -151,6 +151,7 @@ pub trait Rng {
 
 pub trait SuperDisplay {
     fn switch_resolution(&mut self, hi_res: bool);
+    fn scroll_down(&mut self, n: u8);
 }
 
 fn opcode_split(opcode: u16) -> ((u8, u8, u8, u8), u8, u16) {
@@ -451,6 +452,7 @@ mod decode_tests {
 
 #[derive(PartialEq, Debug)]
 enum SuperOpCode {
+    ScrollDown(u8),
     LowRes,
     HiRes,
     Draw16(u8, u8),
@@ -461,6 +463,7 @@ enum SuperOpCode {
 
 fn super_opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<SuperOpCode> {
     match nibbles {
+        (0x0, 0x0, 0xc, n) => Some(SuperOpCode::ScrollDown(n)),
         (0x0, 0x0, 0xf, 0xe) => Some(SuperOpCode::LowRes),
         (0x0, 0x0, 0xf, 0xf) => Some(SuperOpCode::HiRes),
         (0xf, x, 7, 5) => Some(SuperOpCode::Store(x)),
@@ -491,6 +494,12 @@ mod super_decode_tests {
             super_decode(0x51c0),
             Ok(SuperOpCode::Chip8(OpCode::SkipRegistersEqual(1, 0xc)))
         );
+    }
+
+    #[test]
+    fn super_decode_scroll_down() {
+        assert_eq!(super_decode(0x00c2), Ok(SuperOpCode::ScrollDown(2)));
+        assert_eq!(super_decode(0x00ca), Ok(SuperOpCode::ScrollDown(0xa)));
     }
 
     #[test]
@@ -917,6 +926,7 @@ impl Cpu {
         opcode: SuperOpCode,
     ) {
         match opcode {
+            SuperOpCode::ScrollDown(n) => peripheral.scroll_down(n),
             SuperOpCode::LowRes => peripheral.switch_resolution(false),
             SuperOpCode::HiRes => peripheral.switch_resolution(true),
             SuperOpCode::Draw16(x, y) => {

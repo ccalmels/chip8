@@ -151,6 +151,21 @@ impl SuperDisplay for Peripheral {
             fb.is_hi_res = hi_res;
         }
     }
+
+    fn scroll_down(&mut self, n: u8) {
+        let to_scroll = if let Some(fb) = &self.framebuffer
+            && fb.is_hi_res
+        {
+            WIDTH_IN_U8 * 2 * n as usize
+        } else {
+            WIDTH_IN_U8 * n as usize
+        };
+        let framebuffer = self.framebuffer_mut();
+
+        framebuffer.copy_within(..framebuffer.len() - to_scroll, to_scroll);
+        framebuffer[..to_scroll].fill(0);
+
+    }
 }
 
 #[cfg(test)]
