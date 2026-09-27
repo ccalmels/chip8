@@ -454,6 +454,8 @@ enum SuperOpCode {
     LowRes,
     HiRes,
     Draw16(u8, u8),
+    Store(u8),
+    Load(u8),
     Chip8(OpCode),
 }
 
@@ -461,6 +463,8 @@ fn super_opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option
     match nibbles {
         (0x0, 0x0, 0xf, 0xe) => Some(SuperOpCode::LowRes),
         (0x0, 0x0, 0xf, 0xf) => Some(SuperOpCode::HiRes),
+        (0xf, x, 7, 5) => Some(SuperOpCode::Store(x)),
+        (0xf, x, 8, 5) => Some(SuperOpCode::Load(x)),
         (0xd, x, y, 0) => Some(SuperOpCode::Draw16(x, y)),
         _ => opcode_match((nibbles, nn, nnn)).map(SuperOpCode::Chip8),
     }
@@ -499,6 +503,18 @@ mod super_decode_tests {
     fn super_decode_draw16() {
         assert_eq!(super_decode(0xd1c0), Ok(SuperOpCode::Draw16(1, 0xc)));
         assert_eq!(super_decode(0xda30), Ok(SuperOpCode::Draw16(0xa, 3)));
+    }
+
+    #[test]
+    fn super_decode_store() {
+        assert_eq!(super_decode(0xf275), Ok(SuperOpCode::Store(2)));
+        assert_eq!(super_decode(0xfa75), Ok(SuperOpCode::Store(0xa)));
+    }
+
+    #[test]
+    fn super_decode_load() {
+        assert_eq!(super_decode(0xf285), Ok(SuperOpCode::Load(2)));
+        assert_eq!(super_decode(0xfa85), Ok(SuperOpCode::Load(0xa)));
     }
 }
 
@@ -684,6 +700,7 @@ pub struct Cpu {
     dt: u8, // delay timer
     st: u8, // sound timer
     quirks: Quirks,
+    storage: [u8; 16],
 }
 
 impl Cpu {
@@ -704,6 +721,7 @@ impl Cpu {
             dt: 0,
             st: 0,
             quirks,
+            storage: [0; 16],
         }
     }
 
@@ -915,6 +933,16 @@ impl Cpu {
                 }
 
                 self.vs[0xf] |= peripheral.draw(self.vs[x] + 8, self.vs[y], &sprite) as u8;
+            }
+            SuperOpCode::Store(x) => {
+                for i in 0..=x {
+                    self.storage[i as usize] = self.vs[i]
+                }
+            }
+            SuperOpCode::Load(x) => {
+                for i in 0..=x {
+                    self.vs[i] = self.storage[i as usize]
+                }
             }
             SuperOpCode::Chip8(opcode) => self.execute(peripheral, rng, opcode),
         }
