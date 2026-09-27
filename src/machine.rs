@@ -160,6 +160,18 @@ impl KeyListener for Chip8 {
             winit::keyboard::KeyCode::KeyX => 0,
             winit::keyboard::KeyCode::KeyC => 0xb,
             winit::keyboard::KeyCode::KeyV => 0xf,
+            winit::keyboard::KeyCode::PrintScreen => {
+                if !is_pressed {
+                    const SCREENSHOT_PATH: &str = "/tmp/framebuffer.data";
+
+                    println!(
+                        "Saving framebuffer in {}: {:?}",
+                        SCREENSHOT_PATH,
+                        std::fs::write(SCREENSHOT_PATH, self.framebuffer())
+                    );
+                }
+                return;
+            }
             _ => return,
         };
 
