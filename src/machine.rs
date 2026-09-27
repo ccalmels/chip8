@@ -26,8 +26,6 @@ struct Component {
 impl Tickable for Component {
     type Error = crate::Error;
 
-    // CPU at 500 Hz
-    const DT_TICK: Duration = Duration::from_micros(1_000_000 / 500);
     // Timers at 60 Hz
     const DT_TICK_TIMER: Duration = Duration::from_micros(1_000_000 / 60);
 
@@ -95,13 +93,15 @@ impl Chip8 {
                 Quirks::classic()
             };
 
+            let freq = if is_superchip { 2_000 } else { 500 };
+
             let component = Component {
                 cpu: Cpu::new(!is_superchip, quirks),
                 peripheral: Peripheral::new(!is_superchip, memory.try_into().unwrap()),
                 rng: Random(),
                 is_superchip,
             };
-            let ticker = Ticker::new();
+            let ticker = Ticker::new(Duration::from_micros(1_000_000 / freq));
 
             Ok(Self { component, ticker })
         } else {

@@ -3,7 +3,6 @@ use std::time::Duration;
 pub trait Tickable {
     type Error;
 
-    const DT_TICK: Duration;
     const DT_TICK_TIMER: Duration;
 
     fn tick(&mut self) -> Result<(), Self::Error>;
@@ -13,25 +12,24 @@ pub trait Tickable {
 pub struct Ticker {
     accumulator: Duration,
     timer_accumulator: Duration,
+    dt_tick: Duration,
 }
 
 impl Ticker {
-    pub fn new() -> Self {
+    pub fn new(dt_tick: Duration) -> Self {
         Ticker {
             accumulator: Duration::ZERO,
             timer_accumulator: Duration::ZERO,
+            dt_tick,
         }
     }
 
     pub fn tick<T: Tickable>(&mut self, delta: Duration, target: &mut T) -> Result<(), T::Error> {
-        const {
-            assert!(T::DT_TICK.as_nanos() < T::DT_TICK_TIMER.as_nanos());
-        }
         self.accumulator += delta;
 
-        while self.accumulator >= T::DT_TICK {
-            self.accumulator -= T::DT_TICK;
-            self.timer_accumulator += T::DT_TICK;
+        while self.accumulator >= self.dt_tick {
+            self.accumulator -= self.dt_tick;
+            self.timer_accumulator += self.dt_tick;
 
             if self.timer_accumulator >= T::DT_TICK_TIMER {
                 self.timer_accumulator -= T::DT_TICK_TIMER;
@@ -46,17 +44,12 @@ impl Ticker {
     }
 }
 
-impl Default for Ticker {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tick_tests {
     use super::*;
 
     const DT_HZ: u64 = 500;
+    const DT_TICK: Duration = Duration::from_micros(1_000_000 / DT_HZ);
     const DT_TIMER_HZ: u64 = 60;
 
     #[derive(PartialEq, Debug)]
@@ -83,7 +76,6 @@ mod tick_tests {
     impl Tickable for MockTickable {
         type Error = MockError;
 
-        const DT_TICK: Duration = Duration::from_micros(1_000_000 / DT_HZ);
         const DT_TICK_TIMER: Duration = Duration::from_micros(1_000_000 / DT_TIMER_HZ);
 
         fn tick(&mut self) -> Result<(), Self::Error> {
@@ -104,7 +96,7 @@ mod tick_tests {
 
     #[test]
     fn ticks_error() {
-        let mut ticker = Ticker::default();
+        let mut ticker = Ticker::new(DT_TICK);
         let mut mock = MockTickable::new();
 
         mock.do_error = true;
@@ -117,7 +109,7 @@ mod tick_tests {
 
     #[test]
     fn ticks_count() {
-        let mut ticker = Ticker::default();
+        let mut ticker = Ticker::new(DT_TICK);
         let mut mock = MockTickable::new();
 
         let _ = ticker.tick(Duration::from_secs(1), &mut mock);
@@ -128,7 +120,7 @@ mod tick_tests {
 
     #[test]
     fn ticks_interleaved() {
-        let mut ticker = Ticker::default();
+        let mut ticker = Ticker::new(DT_TICK);
         let mut mock = MockTickable::new();
 
         let _ = ticker.tick(Duration::from_millis(16), &mut mock);
