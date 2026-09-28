@@ -738,9 +738,9 @@ pub struct Cpu {
 
 impl Cpu {
     pub const START_PC: Address = Address::new(0x200);
-    pub const FONTS: Address = Address::new(0x050);
+    pub const FONTS: Address = Address::new(0x000);
     const FONTS_SIZE: u16 = 0x50;
-    const HI_FONTS: Address = Address::new(0x050 + Self::FONTS_SIZE);
+    const HI_FONTS: Address = Address::new(Self::FONTS.value() + Self::FONTS_SIZE);
     const SP: Address = Address::new(0xeff);
 
     pub fn new(stack_in_memory: bool, quirks: Quirks) -> Self {
