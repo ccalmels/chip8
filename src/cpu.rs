@@ -964,13 +964,14 @@ impl Cpu {
                     *byte = peripheral.read(self.i.wrapping_add(2 * row as u16));
                 }
 
-                self.vs[0xf] = peripheral.draw(self.vs[x], self.vs[y], &sprite) as u8;
+                let flag = peripheral.draw(self.vs[x], self.vs[y], &sprite) as u8;
 
                 for (row, byte) in sprite.iter_mut().enumerate() {
                     *byte = peripheral.read(self.i.wrapping_add(1 + 2 * row as u16));
                 }
 
-                self.vs[0xf] |= peripheral.draw(self.vs[x].wrapping_add(8), self.vs[y], &sprite) as u8;
+                self.vs[0xf] =
+                    flag | peripheral.draw(self.vs[x].wrapping_add(8), self.vs[y], &sprite) as u8;
             }
             SuperOpCode::HiSprite(x) => {
                 self.i = Self::HI_FONTS.wrapping_add((self.vs[x] as u16 & 0xf) * 10)
