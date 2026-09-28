@@ -25,6 +25,8 @@ impl Ticker {
     }
 
     pub fn tick<T: Tickable>(&mut self, delta: Duration, target: &mut T) -> Result<(), T::Error> {
+        debug_assert!(self.dt_tick < T::DT_TICK_TIMER);
+
         self.accumulator += delta;
 
         while self.accumulator >= self.dt_tick {
