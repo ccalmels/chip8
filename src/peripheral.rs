@@ -151,7 +151,7 @@ impl Keypad for Peripheral {
     }
 }
 
-fn scroll_line_right<const N: usize>(line: &mut [u8; N]) {
+fn scroll_line_right(line: &mut [u8]) {
     let mut rest = 0;
 
     for element in line.iter_mut() {
@@ -163,7 +163,7 @@ fn scroll_line_right<const N: usize>(line: &mut [u8; N]) {
     }
 }
 
-fn scroll_line_left<const N: usize>(line: &mut [u8; N]) {
+fn scroll_line_left(line: &mut [u8]) {
     let mut rest = 0;
 
     for element in line.iter_mut().rev() {
@@ -175,8 +175,8 @@ fn scroll_line_left<const N: usize>(line: &mut [u8; N]) {
     }
 }
 
-fn scroll<const N: usize, F: Fn(&mut [u8; N])>(framebuffer: &mut [u8], f: F) {
-    let (chunks, _remainder) = framebuffer.as_chunks_mut::<N>();
+fn scroll(framebuffer: &mut [u8], n: usize, f: fn(&mut [u8])) {
+    let chunks = framebuffer.chunks_exact_mut(n);
 
     for line in chunks {
         f(line);
@@ -204,17 +204,17 @@ impl SuperDisplay for Peripheral {
 
     fn scroll_right(&mut self) {
         if self.is_hi_res() {
-            scroll::<{ WIDTH_IN_U8 * 2 }, _>(self.framebuffer_mut(), scroll_line_right);
+            scroll(self.framebuffer_mut(), WIDTH_IN_U8 * 2, scroll_line_right);
         } else {
-            scroll::<WIDTH_IN_U8, _>(self.framebuffer_mut(), scroll_line_right);
+            scroll(self.framebuffer_mut(), WIDTH_IN_U8, scroll_line_right);
         }
     }
 
     fn scroll_left(&mut self) {
         if self.is_hi_res() {
-            scroll::<{ WIDTH_IN_U8 * 2 }, _>(self.framebuffer_mut(), scroll_line_left);
+            scroll(self.framebuffer_mut(), WIDTH_IN_U8 * 2, scroll_line_left);
         } else {
-            scroll::<WIDTH_IN_U8, _>(self.framebuffer_mut(), scroll_line_left);
+            scroll(self.framebuffer_mut(), WIDTH_IN_U8, scroll_line_left);
         }
     }
 }
