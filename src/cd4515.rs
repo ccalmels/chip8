@@ -34,7 +34,7 @@ impl Cd4515 {
         if is_pressed {
             self.keys |= 1 << key;
         } else {
-            self.keys ^= 1 << key;
+            self.keys &= !(1 << key);
 
             if self.is_waiting && self.last_key.is_none() {
                 self.last_key = Some(key);
