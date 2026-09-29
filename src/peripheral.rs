@@ -83,6 +83,14 @@ impl Peripheral {
 
         ret
     }
+
+    fn is_hi_res(&self) -> bool {
+        if let Some(fb) = &self.framebuffer {
+            fb.is_hi_res
+        } else {
+            false
+        }
+    }
 }
 
 impl Memory for Peripheral {
@@ -101,9 +109,7 @@ impl Display for Peripheral {
     }
 
     fn draw(&mut self, x: u8, y: u8, sprite: &[u8]) -> bool {
-        let (width, height, width_in_u8) = if let Some(fb) = &self.framebuffer
-            && fb.is_hi_res
-        {
+        let (width, height, width_in_u8) = if self.is_hi_res() {
             (WIDTH * 2, HEIGHT * 2, WIDTH_IN_U8 * 2)
         } else {
             (WIDTH, HEIGHT, WIDTH_IN_U8)
@@ -185,9 +191,7 @@ impl SuperDisplay for Peripheral {
     }
 
     fn scroll_down(&mut self, n: u8) {
-        let to_scroll = if let Some(fb) = &self.framebuffer
-            && fb.is_hi_res
-        {
+        let to_scroll = if self.is_hi_res() {
             WIDTH_IN_U8 * 2 * n as usize
         } else {
             WIDTH_IN_U8 * n as usize
@@ -199,9 +203,7 @@ impl SuperDisplay for Peripheral {
     }
 
     fn scroll_right(&mut self) {
-        if let Some(fb) = &self.framebuffer
-            && fb.is_hi_res
-        {
+        if self.is_hi_res() {
             scroll::<{ WIDTH_IN_U8 * 2 }, _>(self.framebuffer_mut(), scroll_line_right);
         } else {
             scroll::<WIDTH_IN_U8, _>(self.framebuffer_mut(), scroll_line_right);
@@ -209,9 +211,7 @@ impl SuperDisplay for Peripheral {
     }
 
     fn scroll_left(&mut self) {
-        if let Some(fb) = &self.framebuffer
-            && fb.is_hi_res
-        {
+        if self.is_hi_res() {
             scroll::<{ WIDTH_IN_U8 * 2 }, _>(self.framebuffer_mut(), scroll_line_left);
         } else {
             scroll::<WIDTH_IN_U8, _>(self.framebuffer_mut(), scroll_line_left);
