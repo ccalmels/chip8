@@ -135,8 +135,8 @@ mod registers_tests {
 }
 
 pub trait Memory {
-    fn read(&self, address: Address<12>) -> u8;
-    fn write(&mut self, address: Address<12>, value: u8);
+    fn read(&self, address: Address<16>) -> u8;
+    fn write(&mut self, address: Address<16>, value: u8);
 }
 
 pub trait Display {
@@ -566,8 +566,8 @@ mod super_decode_tests {
 }
 
 fn fetch<M: Memory>(memory: &M, pc: Address<12>) -> u16 {
-    let high = memory.read(pc);
-    let low = memory.read(pc.wrapping_add(1));
+    let high = memory.read(pc.into());
+    let low = memory.read(pc.wrapping_add(1).into());
 
     (high as u16) << 8 | low as u16
 }
@@ -579,11 +579,11 @@ mod fetch_tests {
     pub struct FakeMemory(pub Vec<u8>);
 
     impl Memory for FakeMemory {
-        fn read(&self, address: Address<12>) -> u8 {
+        fn read(&self, address: Address<16>) -> u8 {
             self.0[address.value() as usize]
         }
 
-        fn write(&mut self, address: Address<12>, value: u8) {
+        fn write(&mut self, address: Address<16>, value: u8) {
             self.0[address.value() as usize] = value;
         }
     }
@@ -609,10 +609,10 @@ impl Stack {
             Stack::Memory(sp) => {
                 let (high, low) = ((address.value() >> 8) as u8, (address.value() & 0xff) as u8);
 
-                memory.write(*sp, high);
+                memory.write((*sp).into(), high);
                 *sp = sp.wrapping_sub(1);
 
-                memory.write(*sp, low);
+                memory.write((*sp).into(), low);
                 *sp = sp.wrapping_sub(1);
             }
             Stack::Internal(stack) => stack.push(address),
@@ -623,10 +623,10 @@ impl Stack {
         match self {
             Stack::Memory(sp) => {
                 *sp = sp.wrapping_add(1);
-                let low = memory.read(*sp);
+                let low = memory.read((*sp).into());
 
                 *sp = sp.wrapping_add(1);
-                let high = memory.read(*sp);
+                let high = memory.read((*sp).into());
 
                 Address::<12>::new((high as u16) << 8 | low as u16)
             }
@@ -642,11 +642,11 @@ mod stack_tests {
     struct MockMemory([u8; 8]);
 
     impl Memory for MockMemory {
-        fn read(&self, address: Address<12>) -> u8 {
+        fn read(&self, address: Address<16>) -> u8 {
             self.0[address.value() as usize]
         }
 
-        fn write(&mut self, address: Address<12>, value: u8) {
+        fn write(&mut self, address: Address<16>, value: u8) {
             self.0[address.value() as usize] = value;
         }
     }
@@ -742,7 +742,7 @@ impl Quirks {
 pub struct Cpu {
     pc: Address<12>,
     stack: Stack,
-    i: Address<12>,
+    i: Address<16>,
     vs: Registers,
     dt: u8, // delay timer
     quirks: Quirks,
@@ -751,9 +751,9 @@ pub struct Cpu {
 
 impl Cpu {
     pub const START_PC: Address<12> = Address::<12>::new(0x200);
-    pub const FONTS: Address<12> = Address::<12>::new(0x000);
+    pub const FONTS: Address<16> = Address::<16>::new(0x000);
     const FONTS_SIZE: u16 = 0x50;
-    const HI_FONTS: Address<12> = Address::<12>::new(Self::FONTS.value() + Self::FONTS_SIZE);
+    const HI_FONTS: Address<16> = Address::<16>::new(Self::FONTS.value() + Self::FONTS_SIZE);
     const SP: Address<12> = Address::<12>::new(0xeff);
 
     pub fn new(stack_in_memory: bool, quirks: Quirks) -> Self {
@@ -764,7 +764,7 @@ impl Cpu {
             } else {
                 Stack::Internal(vec![])
             },
-            i: Address::<12>::new(0),
+            i: Address::<16>::new(0),
             vs: Registers([0; 16]),
             dt: 0,
             quirks,
@@ -870,7 +870,7 @@ impl Cpu {
                     self.pc = self.pc.wrapping_add(2)
                 }
             }
-            OpCode::LoadIndex(addr) => self.i = addr,
+            OpCode::LoadIndex(addr) => self.i = addr.into(),
             OpCode::Flow(addr) => {
                 if self.quirks.jumping {
                     let x = (addr.value() >> 8) as u8;
@@ -1060,11 +1060,11 @@ mod execute_tests {
     }
 
     impl Memory for MockPeripheral {
-        fn read(&self, address: Address<12>) -> u8 {
+        fn read(&self, address: Address<16>) -> u8 {
             self.memory[address.value() as usize]
         }
 
-        fn write(&mut self, address: Address<12>, value: u8) {
+        fn write(&mut self, address: Address<16>, value: u8) {
             self.memory[address.value() as usize] = value;
         }
     }
