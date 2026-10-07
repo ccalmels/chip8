@@ -47,6 +47,24 @@ Opcodes clocked at 1KHz or better.
 *** Resources
 - https://chip8.gulrak.net/
 
+** Xo-Chip
+*** Memory
+16K
+*** Registers
+- PC on 16 bits
+- Index on 16 bits
+*** Display
+2 planes: so 4 colors
+*** New Opcode
+- Scroll up
+- Load/Write registers at Index
+- Load 16 bit value to Index
+- Select display plane to draw into
+- Load 16 bits pattern for audio frame
+- Set audio pitch
+*** Resources
+- https://johnearnest.github.io/Octo/docs/XO-ChipSpecification.html
+
 ** Resources
 - https://en.wikipedia.org/wiki/CHIP-8
 - https://beyondloom.com/blog/artofchip8.html
