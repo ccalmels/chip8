@@ -142,7 +142,7 @@ pub trait Keypad {
 }
 
 pub trait Beeper {
-    fn beep(&self, running: bool);
+    fn sound_timer(&mut self, st: u8);
 }
 
 pub trait Rng {
@@ -731,7 +731,6 @@ pub struct Cpu {
     i: Address,
     vs: Registers,
     dt: u8, // delay timer
-    st: u8, // sound timer
     quirks: Quirks,
     storage: [u8; 16],
 }
@@ -754,25 +753,18 @@ impl Cpu {
             i: Address::new(0),
             vs: Registers([0; 16]),
             dt: 0,
-            st: 0,
             quirks,
             storage: [0; 16],
         }
     }
 
-    pub fn tick_timer<B: Beeper>(&mut self, beeper: &B) {
+    pub fn delay_timer(&mut self) {
         if self.dt > 0 {
             self.dt -= 1;
         }
-
-        if self.st > 0 {
-            self.st -= 1;
-        }
-
-        beeper.beep(self.st != 0);
     }
 
-    fn execute<P: Memory + Display + Keypad, R: Rng>(
+    fn execute<P: Memory + Display + Keypad + Beeper, R: Rng>(
         &mut self,
         peripheral: &mut P,
         rng: &R,
@@ -903,7 +895,7 @@ impl Cpu {
                 }
             }
             OpCode::Delay(x) => self.dt = self.vs[x],
-            OpCode::Sound(x) => self.st = self.vs[x],
+            OpCode::Sound(x) => peripheral.sound_timer(self.vs[x]),
             OpCode::IncIndex(x) => self.i = self.i.wrapping_add(self.vs[x] as u16),
             OpCode::Sprite(x) => self.i = Self::FONTS.wrapping_add((self.vs[x] as u16 & 0xf) * 5),
             OpCode::Bcd(x) => {
@@ -945,7 +937,7 @@ impl Cpu {
         }
     }
 
-    fn super_execute<P: Memory + Display + Keypad + SuperDisplay, R: Rng>(
+    fn super_execute<P: Memory + Display + Keypad + Beeper + SuperDisplay, R: Rng>(
         &mut self,
         peripheral: &mut P,
         rng: &R,
@@ -990,7 +982,7 @@ impl Cpu {
         }
     }
 
-    pub fn step<P: Memory + Display + Keypad, R: Rng>(
+    pub fn step<P: Memory + Display + Keypad + Beeper, R: Rng>(
         &mut self,
         peripheral: &mut P,
         rng: &R,
@@ -1005,7 +997,7 @@ impl Cpu {
         Ok(())
     }
 
-    pub fn super_step<P: Memory + Display + Keypad + SuperDisplay, R: Rng>(
+    pub fn super_step<P: Memory + Display + Keypad + Beeper + SuperDisplay, R: Rng>(
         &mut self,
         peripheral: &mut P,
         rng: &R,
@@ -1082,6 +1074,10 @@ mod execute_tests {
         fn wait_key(&mut self) -> Option<u8> {
             self.waited_key
         }
+    }
+
+    impl Beeper for MockPeripheral {
+        fn sound_timer(&mut self, _st: u8) {}
     }
 
     struct FixedRng(u8);

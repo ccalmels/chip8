@@ -1,6 +1,6 @@
 use crate::ca555::Ca555;
 use crate::cd4515::Cd4515;
-use crate::cpu::{Address, Display, Keypad, Memory, SuperDisplay};
+use crate::cpu::{Address, Beeper, Display, Keypad, Memory, SuperDisplay};
 
 const PIXEL_PER_U8: usize = 8;
 pub const WIDTH: u8 = 64;
@@ -148,6 +148,12 @@ impl Keypad for Peripheral {
 
     fn wait_key(&mut self) -> Option<u8> {
         self.keypad.wait_key()
+    }
+}
+
+impl Beeper for Peripheral {
+    fn sound_timer(&mut self, st: u8) {
+        self.beeper.set(st);
     }
 }
 

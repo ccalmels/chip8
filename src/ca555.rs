@@ -1,4 +1,3 @@
-use crate::cpu::Beeper;
 use rodio::source::{SineWave, Source};
 use rodio::stream::DeviceSinkBuilder;
 use rodio::{MixerDeviceSink, Player};
@@ -10,6 +9,7 @@ struct SinkPlayer {
 
 pub struct Ca555 {
     beep: Option<SinkPlayer>,
+    st: u8,
 }
 
 impl Ca555 {
@@ -30,9 +30,28 @@ impl Ca555 {
                     _sink: sink,
                     player,
                 }),
+                st: 0,
             }
         } else {
-            Self { beep: None }
+            Self { beep: None, st: 0 }
+        }
+    }
+
+    pub fn set(&mut self, st: u8) {
+        self.st = st;
+    }
+
+    pub fn tick(&mut self) {
+        if let Some(sink) = &self.beep {
+            if self.st == 0 {
+                sink.player.pause();
+            } else {
+                sink.player.play();
+            }
+        }
+
+        if self.st > 0 {
+            self.st -= 1;
         }
     }
 }
@@ -40,17 +59,5 @@ impl Ca555 {
 impl Default for Ca555 {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl Beeper for Ca555 {
-    fn beep(&self, running: bool) {
-        if let Some(beep) = &self.beep {
-            if running {
-                beep.player.play();
-            } else {
-                beep.player.pause();
-            }
-        }
     }
 }
