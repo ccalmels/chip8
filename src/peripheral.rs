@@ -94,11 +94,11 @@ impl Peripheral {
 }
 
 impl Memory for Peripheral {
-    fn read(&self, address: Address) -> u8 {
+    fn read(&self, address: Address<12>) -> u8 {
         self.memory[address.value() as usize]
     }
 
-    fn write(&mut self, address: Address, value: u8) {
+    fn write(&mut self, address: Address<12>, value: u8) {
         self.memory[address.value() as usize] = value;
     }
 }

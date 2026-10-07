@@ -3,11 +3,13 @@ use std::ops::{Index, IndexMut};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 #[must_use]
-pub struct Address(u16);
+pub struct Address<const N: usize>(u16);
 
-impl Address {
+impl<const N: usize> Address<N> {
+    const MASK: u16 = ((1u32 << N) - 1) as u16;
+
     pub const fn new(value: u16) -> Self {
-        Address(value & 0xfff)
+        Address(value & Self::MASK)
     }
 
     pub const fn value(self) -> u16 {
@@ -23,50 +25,56 @@ impl Address {
     }
 }
 
+impl From<Address<12>> for Address<16> {
+    fn from(val: Address<12>) -> Self {
+        Self::new(val.value())
+    }
+}
+
 #[cfg(test)]
 mod address_tests {
     use super::*;
 
     #[test]
     fn new_masks_value_to_12_bits() {
-        assert_eq!(Address::new(0x200).value(), 0x200);
-        assert_eq!(Address::new(0x1000).value(), 0x000);
-        assert_eq!(Address::new(0xf000).value(), 0x000);
-        assert_eq!(Address::new(0xffff).value(), 0xfff);
+        assert_eq!(Address::<12>::new(0x200).value(), 0x200);
+        assert_eq!(Address::<12>::new(0x1000).value(), 0x000);
+        assert_eq!(Address::<12>::new(0xf000).value(), 0x000);
+        assert_eq!(Address::<12>::new(0xffff).value(), 0xfff);
     }
 
     #[test]
     fn wrapping_add_wraps_at_max() {
-        assert_eq!(Address::new(0xfff).wrapping_add(1).value(), 0x000);
+        assert_eq!(Address::<12>::new(0xfff).wrapping_add(1).value(), 0x000);
     }
 
     #[test]
     fn wrapping_add_continue_after_wrap() {
-        assert_eq!(Address::new(0xfff).wrapping_add(2).value(), 0x001);
+        assert_eq!(Address::<12>::new(0xfff).wrapping_add(2).value(), 0x001);
     }
 
     #[test]
     fn wrapping_add_large_offsets() {
-        assert_eq!(Address::new(0x001).wrapping_add(0xfff).value(), 0x000);
-        assert_eq!(Address::new(0x002).wrapping_add(0xfff).value(), 0x001);
-        assert_eq!(Address::new(0xfff).wrapping_add(0xfff).value(), 0xffe);
+        assert_eq!(Address::<12>::new(0x001).wrapping_add(0xfff).value(), 0x000);
+        assert_eq!(Address::<12>::new(0x002).wrapping_add(0xfff).value(), 0x001);
+        assert_eq!(Address::<12>::new(0xfff).wrapping_add(0xfff).value(), 0xffe);
     }
 
     #[test]
     fn wrapping_sub_at_min() {
-        assert_eq!(Address::new(0x0).wrapping_sub(1).value(), 0xfff);
+        assert_eq!(Address::<12>::new(0x0).wrapping_sub(1).value(), 0xfff);
     }
 
     #[test]
     fn wrapping_sub_after_wrap() {
-        assert_eq!(Address::new(0x0).wrapping_sub(2).value(), 0xffe);
+        assert_eq!(Address::<12>::new(0x0).wrapping_sub(2).value(), 0xffe);
     }
 
     #[test]
     fn wrapping_sub_larg_offset() {
-        assert_eq!(Address::new(0xfff).wrapping_sub(0xfff).value(), 0x0);
-        assert_eq!(Address::new(0xffe).wrapping_sub(0xfff).value(), 0xfff);
-        assert_eq!(Address::new(0x0).wrapping_sub(0xfff).value(), 0x1);
+        assert_eq!(Address::<12>::new(0xfff).wrapping_sub(0xfff).value(), 0x0);
+        assert_eq!(Address::<12>::new(0xffe).wrapping_sub(0xfff).value(), 0xfff);
+        assert_eq!(Address::<12>::new(0x0).wrapping_sub(0xfff).value(), 0x1);
     }
 }
 
@@ -127,8 +135,8 @@ mod registers_tests {
 }
 
 pub trait Memory {
-    fn read(&self, address: Address) -> u8;
-    fn write(&mut self, address: Address, value: u8);
+    fn read(&self, address: Address<12>) -> u8;
+    fn write(&mut self, address: Address<12>, value: u8);
 }
 
 pub trait Display {
@@ -173,8 +181,8 @@ fn opcode_split(opcode: u16) -> ((u8, u8, u8, u8), u8, u16) {
 enum OpCode {
     Clear,
     Return,
-    Jump(Address),
-    Call(Address),
+    Jump(Address<12>),
+    Call(Address<12>),
     SkipEqual(u8, u8),
     SkipNotEqual(u8, u8),
     SkipRegistersEqual(u8, u8),
@@ -190,8 +198,8 @@ enum OpCode {
     InvSub(u8, u8),
     LShift(u8, u8),
     SkipRegistersNotEqual(u8, u8),
-    LoadIndex(Address),
-    Flow(Address),
+    LoadIndex(Address<12>),
+    Flow(Address<12>),
     Rand(u8, u8),
     Draw(u8, u8, u8),
     IsKey(u8),
@@ -211,8 +219,8 @@ fn opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<OpCod
     match nibbles {
         (0x0, 0x0, 0xe, 0x0) => Some(OpCode::Clear),
         (0x0, 0x0, 0xe, 0xe) => Some(OpCode::Return),
-        (0x1, _, _, _) => Some(OpCode::Jump(Address::new(nnn))),
-        (0x2, _, _, _) => Some(OpCode::Call(Address::new(nnn))),
+        (0x1, _, _, _) => Some(OpCode::Jump(Address::<12>::new(nnn))),
+        (0x2, _, _, _) => Some(OpCode::Call(Address::<12>::new(nnn))),
         (0x3, x, _, _) => Some(OpCode::SkipEqual(x, nn)),
         (0x4, x, _, _) => Some(OpCode::SkipNotEqual(x, nn)),
         (0x5, x, y, 0) => Some(OpCode::SkipRegistersEqual(x, y)),
@@ -228,8 +236,8 @@ fn opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<OpCod
         (0x8, x, y, 7) => Some(OpCode::InvSub(x, y)),
         (0x8, x, y, 0xe) => Some(OpCode::LShift(x, y)),
         (0x9, x, y, 0) => Some(OpCode::SkipRegistersNotEqual(x, y)),
-        (0xa, _, _, _) => Some(OpCode::LoadIndex(Address::new(nnn))),
-        (0xb, _, _, _) => Some(OpCode::Flow(Address::new(nnn))),
+        (0xa, _, _, _) => Some(OpCode::LoadIndex(Address::<12>::new(nnn))),
+        (0xb, _, _, _) => Some(OpCode::Flow(Address::<12>::new(nnn))),
         (0xc, x, _, _) => Some(OpCode::Rand(x, nn)),
         (0xd, x, y, n) => Some(OpCode::Draw(x, y, n)),
         (0xe, x, 9, 0xe) => Some(OpCode::IsKey(x)),
@@ -268,14 +276,14 @@ mod decode_tests {
 
     #[test]
     fn decode_jump() {
-        assert_eq!(decode(0x1123), Ok(OpCode::Jump(Address::new(0x123))));
-        assert_eq!(decode(0x1fed), Ok(OpCode::Jump(Address::new(0xfed))));
+        assert_eq!(decode(0x1123), Ok(OpCode::Jump(Address::<12>::new(0x123))));
+        assert_eq!(decode(0x1fed), Ok(OpCode::Jump(Address::<12>::new(0xfed))));
     }
 
     #[test]
     fn decode_call() {
-        assert_eq!(decode(0x2123), Ok(OpCode::Call(Address::new(0x123))));
-        assert_eq!(decode(0x2fed), Ok(OpCode::Call(Address::new(0xfed))));
+        assert_eq!(decode(0x2123), Ok(OpCode::Call(Address::<12>::new(0x123))));
+        assert_eq!(decode(0x2fed), Ok(OpCode::Call(Address::<12>::new(0xfed))));
     }
     #[test]
     fn decode_skip_equal() {
@@ -363,14 +371,20 @@ mod decode_tests {
 
     #[test]
     fn decode_load_index() {
-        assert_eq!(decode(0xa123), Ok(OpCode::LoadIndex(Address::new(0x123))));
-        assert_eq!(decode(0xafed), Ok(OpCode::LoadIndex(Address::new(0xfed))));
+        assert_eq!(
+            decode(0xa123),
+            Ok(OpCode::LoadIndex(Address::<12>::new(0x123)))
+        );
+        assert_eq!(
+            decode(0xafed),
+            Ok(OpCode::LoadIndex(Address::<12>::new(0xfed)))
+        );
     }
 
     #[test]
     fn decode_flow() {
-        assert_eq!(decode(0xb123), Ok(OpCode::Flow(Address::new(0x123))));
-        assert_eq!(decode(0xbfed), Ok(OpCode::Flow(Address::new(0xfed))));
+        assert_eq!(decode(0xb123), Ok(OpCode::Flow(Address::<12>::new(0x123))));
+        assert_eq!(decode(0xbfed), Ok(OpCode::Flow(Address::<12>::new(0xfed))));
     }
 
     #[test]
@@ -551,7 +565,7 @@ mod super_decode_tests {
     }
 }
 
-fn fetch<M: Memory>(memory: &M, pc: Address) -> u16 {
+fn fetch<M: Memory>(memory: &M, pc: Address<12>) -> u16 {
     let high = memory.read(pc);
     let low = memory.read(pc.wrapping_add(1));
 
@@ -565,11 +579,11 @@ mod fetch_tests {
     pub struct FakeMemory(pub Vec<u8>);
 
     impl Memory for FakeMemory {
-        fn read(&self, address: Address) -> u8 {
+        fn read(&self, address: Address<12>) -> u8 {
             self.0[address.value() as usize]
         }
 
-        fn write(&mut self, address: Address, value: u8) {
+        fn write(&mut self, address: Address<12>, value: u8) {
             self.0[address.value() as usize] = value;
         }
     }
@@ -578,19 +592,19 @@ mod fetch_tests {
     fn fetch_opcode() {
         let memory = FakeMemory(vec![0xde, 0xad, 0xbe, 0xef]);
 
-        assert_eq!(fetch(&memory, Address::new(0)), 0xdead);
-        assert_eq!(fetch(&memory, Address::new(2)), 0xbeef);
+        assert_eq!(fetch(&memory, Address::<12>::new(0)), 0xdead);
+        assert_eq!(fetch(&memory, Address::<12>::new(2)), 0xbeef);
     }
 }
 
 #[derive(Debug, PartialEq)]
 enum Stack {
-    Memory(Address),
-    Internal(Vec<Address>),
+    Memory(Address<12>),
+    Internal(Vec<Address<12>>),
 }
 
 impl Stack {
-    fn push<M: Memory>(&mut self, memory: &mut M, address: Address) {
+    fn push<M: Memory>(&mut self, memory: &mut M, address: Address<12>) {
         match self {
             Stack::Memory(sp) => {
                 let (high, low) = ((address.value() >> 8) as u8, (address.value() & 0xff) as u8);
@@ -605,7 +619,7 @@ impl Stack {
         }
     }
 
-    fn pop<M: Memory>(&mut self, memory: &M) -> Address {
+    fn pop<M: Memory>(&mut self, memory: &M) -> Address<12> {
         match self {
             Stack::Memory(sp) => {
                 *sp = sp.wrapping_add(1);
@@ -614,9 +628,9 @@ impl Stack {
                 *sp = sp.wrapping_add(1);
                 let high = memory.read(*sp);
 
-                Address::new((high as u16) << 8 | low as u16)
+                Address::<12>::new((high as u16) << 8 | low as u16)
             }
-            Stack::Internal(stack) => stack.pop().unwrap_or(Address::new(0)),
+            Stack::Internal(stack) => stack.pop().unwrap_or(Address::<12>::new(0)),
         }
     }
 }
@@ -628,42 +642,42 @@ mod stack_tests {
     struct MockMemory([u8; 8]);
 
     impl Memory for MockMemory {
-        fn read(&self, address: Address) -> u8 {
+        fn read(&self, address: Address<12>) -> u8 {
             self.0[address.value() as usize]
         }
 
-        fn write(&mut self, address: Address, value: u8) {
+        fn write(&mut self, address: Address<12>, value: u8) {
             self.0[address.value() as usize] = value;
         }
     }
 
     #[test]
     fn push_pop_stack_memory() {
-        let mut stack = Stack::Memory(Address::new(7));
+        let mut stack = Stack::Memory(Address::<12>::new(7));
         let mut memory = MockMemory([0; 8]);
 
         let expected = [0, 0, 0, 0, 0x23, 0x1, 0xbc, 0xa];
 
-        stack.push(&mut memory, Address::new(0xabc));
-        assert_eq!(stack, Stack::Memory(Address::new(5)));
-        stack.push(&mut memory, Address::new(0x123));
-        assert_eq!(stack, Stack::Memory(Address::new(3)));
+        stack.push(&mut memory, Address::<12>::new(0xabc));
+        assert_eq!(stack, Stack::Memory(Address::<12>::new(5)));
+        stack.push(&mut memory, Address::<12>::new(0x123));
+        assert_eq!(stack, Stack::Memory(Address::<12>::new(3)));
 
         assert_eq!(memory.0, expected);
 
         let expected = [0, 0, 0, 0, 0x54, 0x6, 0xbc, 0xa];
 
-        assert_eq!(stack.pop(&memory), Address::new(0x123));
-        assert_eq!(stack, Stack::Memory(Address::new(5)));
+        assert_eq!(stack.pop(&memory), Address::<12>::new(0x123));
+        assert_eq!(stack, Stack::Memory(Address::<12>::new(5)));
 
-        stack.push(&mut memory, Address::new(0x654));
+        stack.push(&mut memory, Address::<12>::new(0x654));
         assert_eq!(memory.0, expected);
-        assert_eq!(stack, Stack::Memory(Address::new(3)));
+        assert_eq!(stack, Stack::Memory(Address::<12>::new(3)));
 
-        assert_eq!(stack.pop(&memory), Address::new(0x654));
-        assert_eq!(stack, Stack::Memory(Address::new(5)));
-        assert_eq!(stack.pop(&memory), Address::new(0xabc));
-        assert_eq!(stack, Stack::Memory(Address::new(7)));
+        assert_eq!(stack.pop(&memory), Address::<12>::new(0x654));
+        assert_eq!(stack, Stack::Memory(Address::<12>::new(5)));
+        assert_eq!(stack.pop(&memory), Address::<12>::new(0xabc));
+        assert_eq!(stack, Stack::Memory(Address::<12>::new(7)));
     }
 
     #[test]
@@ -671,29 +685,29 @@ mod stack_tests {
         let mut stack = Stack::Internal(vec![]);
         let mut memory = MockMemory([0; 8]);
 
-        stack.push(&mut memory, Address::new(0xabc));
-        assert_eq!(stack, Stack::Internal(vec![Address::new(0xabc)]));
+        stack.push(&mut memory, Address::<12>::new(0xabc));
+        assert_eq!(stack, Stack::Internal(vec![Address::<12>::new(0xabc)]));
 
-        stack.push(&mut memory, Address::new(0x123));
+        stack.push(&mut memory, Address::<12>::new(0x123));
         assert_eq!(
             stack,
-            Stack::Internal(vec![Address::new(0xabc), Address::new(0x123)])
+            Stack::Internal(vec![Address::<12>::new(0xabc), Address::<12>::new(0x123)])
         );
 
-        assert_eq!(stack.pop(&memory), Address::new(0x123));
-        assert_eq!(stack, Stack::Internal(vec![Address::new(0xabc)]));
+        assert_eq!(stack.pop(&memory), Address::<12>::new(0x123));
+        assert_eq!(stack, Stack::Internal(vec![Address::<12>::new(0xabc)]));
 
-        stack.push(&mut memory, Address::new(0x654));
+        stack.push(&mut memory, Address::<12>::new(0x654));
 
         assert_eq!(
             stack,
-            Stack::Internal(vec![Address::new(0xabc), Address::new(0x654)])
+            Stack::Internal(vec![Address::<12>::new(0xabc), Address::<12>::new(0x654)])
         );
 
-        assert_eq!(stack.pop(&memory), Address::new(0x654));
-        assert_eq!(stack, Stack::Internal(vec![Address::new(0xabc)]));
+        assert_eq!(stack.pop(&memory), Address::<12>::new(0x654));
+        assert_eq!(stack, Stack::Internal(vec![Address::<12>::new(0xabc)]));
 
-        assert_eq!(stack.pop(&memory), Address::new(0xabc));
+        assert_eq!(stack.pop(&memory), Address::<12>::new(0xabc));
         assert_eq!(stack, Stack::Internal(vec![]));
     }
 }
@@ -726,9 +740,9 @@ impl Quirks {
 }
 
 pub struct Cpu {
-    pc: Address,
+    pc: Address<12>,
     stack: Stack,
-    i: Address,
+    i: Address<12>,
     vs: Registers,
     dt: u8, // delay timer
     quirks: Quirks,
@@ -736,11 +750,11 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub const START_PC: Address = Address::new(0x200);
-    pub const FONTS: Address = Address::new(0x000);
+    pub const START_PC: Address<12> = Address::<12>::new(0x200);
+    pub const FONTS: Address<12> = Address::<12>::new(0x000);
     const FONTS_SIZE: u16 = 0x50;
-    const HI_FONTS: Address = Address::new(Self::FONTS.value() + Self::FONTS_SIZE);
-    const SP: Address = Address::new(0xeff);
+    const HI_FONTS: Address<12> = Address::<12>::new(Self::FONTS.value() + Self::FONTS_SIZE);
+    const SP: Address<12> = Address::<12>::new(0xeff);
 
     pub fn new(stack_in_memory: bool, quirks: Quirks) -> Self {
         Cpu {
@@ -750,7 +764,7 @@ impl Cpu {
             } else {
                 Stack::Internal(vec![])
             },
-            i: Address::new(0),
+            i: Address::<12>::new(0),
             vs: Registers([0; 16]),
             dt: 0,
             quirks,
@@ -1046,11 +1060,11 @@ mod execute_tests {
     }
 
     impl Memory for MockPeripheral {
-        fn read(&self, address: Address) -> u8 {
+        fn read(&self, address: Address<12>) -> u8 {
             self.memory[address.value() as usize]
         }
 
-        fn write(&mut self, address: Address, value: u8) {
+        fn write(&mut self, address: Address<12>, value: u8) {
             self.memory[address.value() as usize] = value;
         }
     }
