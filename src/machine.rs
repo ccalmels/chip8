@@ -1,6 +1,6 @@
 use crate::Error;
 use crate::cpu::{Cpu, Quirks, Rng};
-use crate::peripheral::{FRAMEBUFFER_SIZE, HEIGHT, MEMORY_LENGTH, Peripheral, WIDTH};
+use crate::peripheral::{FRAMEBUFFER_SIZE, HEIGHT, MEMORY_SIZE, Peripheral, WIDTH, XO_MEMORY_SIZE};
 use crate::ticker::{Tickable, Ticker};
 use crate::windowing::{KeyListener, Renderable, Updatable};
 
@@ -24,6 +24,7 @@ pub struct Chip8Builder {
     quirks: Quirks,
     step: fn(&mut Cpu, &mut Peripheral, &Random) -> Result<(), crate::Error>,
     clipping: bool,
+    memory_size: usize,
 }
 
 impl Chip8Builder {
@@ -40,7 +41,7 @@ impl Chip8Builder {
     pub fn load(self, rom: &[u8]) -> Result<Chip8, crate::Error> {
         let start = Cpu::START_PC.value() as usize;
         let fonts = Cpu::FONTS.value() as usize;
-        let capacity = MEMORY_LENGTH - start;
+        let capacity = self.memory_size - start;
 
         if rom.len() <= capacity {
             let mut memory = vec![0; fonts];
@@ -52,15 +53,11 @@ impl Chip8Builder {
             memory.push(self.timendus);
 
             memory.extend_from_slice(rom);
-            memory.resize(MEMORY_LENGTH, 0);
+            memory.resize(self.memory_size, 0);
 
             let component = Component {
                 cpu: Cpu::new(self.stack_in_memory, self.quirks),
-                peripheral: Peripheral::new(
-                    self.framebuffer_in_memory,
-                    self.clipping,
-                    memory.try_into().unwrap(),
-                ),
+                peripheral: Peripheral::new(self.framebuffer_in_memory, self.clipping, memory),
                 rng: Random(),
                 step: self.step,
             };
@@ -93,6 +90,7 @@ impl Chip8Flavor {
                 quirks: Quirks::classic(),
                 step: Cpu::step,
                 clipping: true,
+                memory_size: MEMORY_SIZE,
             },
             Chip8Flavor::SuperChip => Chip8Builder {
                 stack_in_memory: false,
@@ -102,6 +100,7 @@ impl Chip8Flavor {
                 quirks: Quirks::schip(),
                 step: Cpu::super_step,
                 clipping: true,
+                memory_size: MEMORY_SIZE,
             },
             Chip8Flavor::Xo => Chip8Builder {
                 stack_in_memory: false,
@@ -111,6 +110,7 @@ impl Chip8Flavor {
                 quirks: Quirks::xo(),
                 step: Cpu::xo_step,
                 clipping: false,
+                memory_size: XO_MEMORY_SIZE,
             },
         }
     }

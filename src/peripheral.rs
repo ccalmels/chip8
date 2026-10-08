@@ -11,7 +11,8 @@ const HIRES_FRAMEBUFFER_SIZE: usize = FRAMEBUFFER_SIZE * 4;
 
 pub const FRAMEBUFFER_START: usize = 0xf00;
 pub const FRAMEBUFFER_END: usize = 0x1000;
-pub const MEMORY_LENGTH: usize = 0x1000;
+pub const MEMORY_SIZE: usize = 0x1000;
+pub const XO_MEMORY_SIZE: usize = 0x10000;
 
 struct InternalFrameBuffer {
     data: [u8; HIRES_FRAMEBUFFER_SIZE],
@@ -37,7 +38,7 @@ impl InternalFrameBuffer {
 }
 
 pub struct Peripheral {
-    memory: [u8; MEMORY_LENGTH],
+    memory: Vec<u8>,
     pub(crate) beeper: Ca555,
     pub(crate) keypad: Cd4515,
     framebuffer: Option<InternalFrameBuffer>,
@@ -45,7 +46,7 @@ pub struct Peripheral {
 }
 
 impl Peripheral {
-    pub fn new(framebuffer_in_memory: bool, clipping: bool, memory: [u8; MEMORY_LENGTH]) -> Self {
+    pub fn new(framebuffer_in_memory: bool, clipping: bool, memory: Vec<u8>) -> Self {
         Self {
             memory,
             beeper: Ca555::default(),
@@ -237,7 +238,7 @@ mod peripheral_tests {
 
     #[test]
     fn clear_only_framebuffer() {
-        let mut p = Peripheral::new(true, true, [0xff; MEMORY_LENGTH]);
+        let mut p = Peripheral::new(true, true, vec![0xff; MEMORY_SIZE]);
 
         p.clear();
 
@@ -250,17 +251,17 @@ mod peripheral_tests {
 
     #[test]
     fn clear_only_framebuffer_internal() {
-        let mut p = Peripheral::new(false, true, [0xff; MEMORY_LENGTH]);
+        let mut p = Peripheral::new(false, true, vec![0xff; MEMORY_SIZE]);
 
         p.clear();
 
         assert_eq!(p.framebuffer(), [0; FRAMEBUFFER_SIZE]);
-        assert_eq!(p.memory[..], [0xff; MEMORY_LENGTH]);
+        assert_eq!(p.memory[..], [0xff; MEMORY_SIZE]);
     }
 
     #[test]
     fn draw_inside_with_one_line_aligned() {
-        let mut p = Peripheral::new(true, true, [0; MEMORY_LENGTH]);
+        let mut p = Peripheral::new(true, true, vec![0; MEMORY_SIZE]);
 
         assert!(!p.draw(0, 0, &[0xff]));
 
@@ -268,13 +269,13 @@ mod peripheral_tests {
         assert_eq!(p.memory[FRAMEBUFFER_START], 0xff);
         assert_eq!(
             p.memory[FRAMEBUFFER_START + 1..],
-            [0; MEMORY_LENGTH - FRAMEBUFFER_START - 1]
+            [0; MEMORY_SIZE - FRAMEBUFFER_START - 1]
         );
     }
 
     #[test]
     fn draw_inside_with_one_line_not_aligned() {
-        let mut p = Peripheral::new(true, true, [0; MEMORY_LENGTH]);
+        let mut p = Peripheral::new(true, true, vec![0; MEMORY_SIZE]);
 
         assert!(!p.draw(1, 0, &[0xff]));
 
@@ -283,13 +284,13 @@ mod peripheral_tests {
         assert_eq!(p.memory[FRAMEBUFFER_START + 1], 0x80);
         assert_eq!(
             p.memory[FRAMEBUFFER_START + 2..],
-            [0; MEMORY_LENGTH - FRAMEBUFFER_START - 2]
+            [0; MEMORY_SIZE - FRAMEBUFFER_START - 2]
         );
     }
 
     #[test]
     fn draw_inside_with_one_line_not_aligned_large() {
-        let mut p = Peripheral::new(true, true, [0; MEMORY_LENGTH]);
+        let mut p = Peripheral::new(true, true, vec![0; MEMORY_SIZE]);
 
         assert!(!p.draw(6, 0, &[0xff]));
 
@@ -298,13 +299,13 @@ mod peripheral_tests {
         assert_eq!(p.memory[FRAMEBUFFER_START + 1], 0xfc);
         assert_eq!(
             p.memory[FRAMEBUFFER_START + 2..],
-            [0; MEMORY_LENGTH - FRAMEBUFFER_START - 2]
+            [0; MEMORY_SIZE - FRAMEBUFFER_START - 2]
         );
     }
 
     #[test]
     fn draw_inside_with_several_lines_aligned() {
-        let mut p = Peripheral::new(true, true, [0; MEMORY_LENGTH]);
+        let mut p = Peripheral::new(true, true, vec![0; MEMORY_SIZE]);
 
         assert!(!p.draw(32, 16, &[0xde, 0xad, 0xbe, 0xef]));
 
@@ -320,7 +321,7 @@ mod peripheral_tests {
 
     #[test]
     fn draw_inside_with_several_lines_not_aligned() {
-        let mut p = Peripheral::new(true, true, [0; MEMORY_LENGTH]);
+        let mut p = Peripheral::new(true, true, vec![0; MEMORY_SIZE]);
 
         assert!(!p.draw(32 + 3, 16, &[0xde, 0xad, 0xbe, 0xef]));
 
@@ -340,7 +341,7 @@ mod peripheral_tests {
 
     #[test]
     fn draw_clips_sprite_at_bottom() {
-        let mut p = Peripheral::new(true, true, [0; MEMORY_LENGTH]);
+        let mut p = Peripheral::new(true, true, vec![0; MEMORY_SIZE]);
 
         assert!(!p.draw(32, 30, &[0xde, 0xad, 0xbe, 0xef]));
 
@@ -354,7 +355,7 @@ mod peripheral_tests {
 
     #[test]
     fn draw_wraps_sprite_at_bottom() {
-        let mut p = Peripheral::new(true, false, [0; MEMORY_LENGTH]);
+        let mut p = Peripheral::new(true, false, vec![0; MEMORY_SIZE]);
 
         assert!(!p.draw(32, 30, &[0xde, 0xad, 0xbe, 0xef]));
 
@@ -371,7 +372,7 @@ mod peripheral_tests {
 
     #[test]
     fn draw_clips_sprite_at_right() {
-        let mut p = Peripheral::new(true, true, [0; MEMORY_LENGTH]);
+        let mut p = Peripheral::new(true, true, vec![0; MEMORY_SIZE]);
 
         assert!(!p.draw(60, 16, &[0xde, 0xad, 0xbe, 0xef]));
 
@@ -387,7 +388,7 @@ mod peripheral_tests {
 
     #[test]
     fn draw_wraps_sprite_at_right() {
-        let mut p = Peripheral::new(true, false, [0; MEMORY_LENGTH]);
+        let mut p = Peripheral::new(true, false, vec![0; MEMORY_SIZE]);
 
         assert!(!p.draw(60, 16, &[0xde, 0xad, 0xbe, 0xef]));
 
@@ -408,7 +409,7 @@ mod peripheral_tests {
 
     #[test]
     fn draw_xor_report_collision() {
-        let mut p = Peripheral::new(true, true, [0; MEMORY_LENGTH]);
+        let mut p = Peripheral::new(true, true, vec![0; MEMORY_SIZE]);
 
         assert!(!p.draw(0, 0, &[0xff]));
         assert!(p.draw(7, 0, &[0xff]));
@@ -423,7 +424,7 @@ mod peripheral_tests {
 
     #[test]
     fn draw_xor_report_collision_with_overlap() {
-        let mut p = Peripheral::new(true, true, [0; MEMORY_LENGTH]);
+        let mut p = Peripheral::new(true, true, vec![0; MEMORY_SIZE]);
 
         assert!(!p.draw(0, 0, &[0xff]));
         assert!(p.draw(5, 0, &[0x81]));
