@@ -565,6 +565,58 @@ mod super_decode_tests {
     }
 }
 
+#[derive(PartialEq, Debug)]
+enum XoOpCode {
+    SuperChip(SuperOpCode),
+}
+
+fn xo_opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<XoOpCode> {
+    match nibbles {
+        _ => super_opcode_match((nibbles, nn, nnn)).map(XoOpCode::SuperChip),
+    }
+}
+
+fn xo_decode(opcode: u16) -> Result<XoOpCode, Error> {
+    xo_opcode_match(opcode_split(opcode)).ok_or(Error::UnknownOpCode(opcode))
+}
+
+#[cfg(test)]
+mod xo_decode_tests {
+    use super::*;
+
+    #[test]
+    fn xo_decode_unknown_opcode() {
+        assert_eq!(xo_decode(0x9999), Err(Error::UnknownOpCode(0x9999)));
+        assert_eq!(xo_decode(0x0fff), Err(Error::UnknownOpCode(0x0fff)));
+    }
+
+    #[test]
+    fn xo_decode_classic_opcode() {
+        assert_eq!(
+            xo_decode(0x00e0),
+            Ok(XoOpCode::SuperChip(SuperOpCode::Chip8(OpCode::Clear)))
+        );
+        assert_eq!(
+            xo_decode(0x51c0),
+            Ok(XoOpCode::SuperChip(SuperOpCode::Chip8(
+                OpCode::SkipRegistersEqual(1, 0xc)
+            )))
+        );
+    }
+
+    #[test]
+    fn xo_decode_super_opcode() {
+        assert_eq!(
+            xo_decode(0x00fe),
+            Ok(XoOpCode::SuperChip(SuperOpCode::LowRes))
+        );
+        assert_eq!(
+            xo_decode(0x00ff),
+            Ok(XoOpCode::SuperChip(SuperOpCode::HiRes))
+        );
+    }
+}
+
 fn fetch<M: Memory>(memory: &M, pc: Address<12>) -> u16 {
     let high = memory.read(pc.into());
     let low = memory.read(pc.wrapping_add(1).into());
@@ -735,6 +787,15 @@ impl Quirks {
             memory: false,
             shifting: true,
             jumping: true,
+        }
+    }
+
+    pub fn xo() -> Self {
+        Self {
+            vf_reset: false,
+            memory: true,
+            shifting: false,
+            jumping: false,
         }
     }
 }
@@ -996,6 +1057,17 @@ impl Cpu {
         }
     }
 
+    fn xo_execute<P: Memory + Display + Keypad + Beeper + SuperDisplay, R: Rng>(
+        &mut self,
+        peripheral: &mut P,
+        rng: &R,
+        opcode: XoOpCode,
+    ) {
+        match opcode {
+            XoOpCode::SuperChip(opcode) => self.super_execute(peripheral, rng, opcode),
+        }
+    }
+
     pub fn step<P: Memory + Display + Keypad + Beeper, R: Rng>(
         &mut self,
         peripheral: &mut P,
@@ -1022,6 +1094,21 @@ impl Cpu {
         self.pc = self.pc.wrapping_add(2);
 
         self.super_execute(peripheral, rng, opcode);
+
+        Ok(())
+    }
+
+    pub fn xo_step<P: Memory + Display + Keypad + Beeper + SuperDisplay, R: Rng>(
+        &mut self,
+        peripheral: &mut P,
+        rng: &R,
+    ) -> Result<(), crate::Error> {
+        let opcode = fetch(peripheral, self.pc);
+        let opcode = xo_decode(opcode)?;
+
+        self.pc = self.pc.wrapping_add(2);
+
+        self.xo_execute(peripheral, rng, opcode);
 
         Ok(())
     }

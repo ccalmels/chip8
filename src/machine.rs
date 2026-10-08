@@ -74,6 +74,7 @@ impl Chip8Builder {
 pub enum Chip8Flavor {
     Classic,
     SuperChip,
+    Xo,
 }
 
 impl Chip8Flavor {
@@ -94,6 +95,14 @@ impl Chip8Flavor {
                 timendus: 0,
                 quirks: Quirks::schip(),
                 step: Cpu::super_step,
+            },
+            Chip8Flavor::Xo => Chip8Builder {
+                stack_in_memory: false,
+                framebuffer_in_memory: false,
+                frequency: 50_000,
+                timendus: 0,
+                quirks: Quirks::xo(),
+                step: Cpu::xo_step,
             },
         }
     }

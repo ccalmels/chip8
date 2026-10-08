@@ -23,6 +23,10 @@ struct Flavor {
     /// schip-modern mode
     #[arg(short, long)]
     superchip: bool,
+
+    /// xo mode
+    #[arg(short, long)]
+    xo: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -30,6 +34,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rom = std::fs::read(args.rom_path)?;
     let flavor = if args.flavor.superchip {
         Chip8Flavor::SuperChip
+    } else if args.flavor.xo {
+        Chip8Flavor::Xo
     } else {
         Chip8Flavor::Classic
     };
