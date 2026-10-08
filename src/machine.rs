@@ -23,6 +23,7 @@ pub struct Chip8Builder {
     timendus: u8,
     quirks: Quirks,
     step: fn(&mut Cpu, &mut Peripheral, &Random) -> Result<(), crate::Error>,
+    clipping: bool,
 }
 
 impl Chip8Builder {
@@ -55,7 +56,11 @@ impl Chip8Builder {
 
             let component = Component {
                 cpu: Cpu::new(self.stack_in_memory, self.quirks),
-                peripheral: Peripheral::new(self.framebuffer_in_memory, memory.try_into().unwrap()),
+                peripheral: Peripheral::new(
+                    self.framebuffer_in_memory,
+                    self.clipping,
+                    memory.try_into().unwrap(),
+                ),
                 rng: Random(),
                 step: self.step,
             };
@@ -87,6 +92,7 @@ impl Chip8Flavor {
                 timendus: 0,
                 quirks: Quirks::classic(),
                 step: Cpu::step,
+                clipping: true,
             },
             Chip8Flavor::SuperChip => Chip8Builder {
                 stack_in_memory: false,
@@ -95,6 +101,7 @@ impl Chip8Flavor {
                 timendus: 0,
                 quirks: Quirks::schip(),
                 step: Cpu::super_step,
+                clipping: true,
             },
             Chip8Flavor::Xo => Chip8Builder {
                 stack_in_memory: false,
@@ -103,6 +110,7 @@ impl Chip8Flavor {
                 timendus: 0,
                 quirks: Quirks::xo(),
                 step: Cpu::xo_step,
+                clipping: false,
             },
         }
     }

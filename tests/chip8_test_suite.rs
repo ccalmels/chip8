@@ -86,6 +86,20 @@ fn quirks_superchip() {
 }
 
 #[test]
+fn quirks_xo() {
+    let expected = include_bytes!("fixtures/5-quirks.xo.expected");
+    let mut chip8 = Chip8Flavor::Xo
+        .builder()
+        .timendus(3)
+        .load(include_bytes!("fixtures/5-quirks.ch8"))
+        .unwrap();
+
+    chip8.update(Duration::from_secs(5)).unwrap();
+
+    assert_eq!(chip8.framebuffer(), expected);
+}
+
+#[test]
 fn keypad() {
     let expected = include_bytes!("fixtures/6-keypad.expected");
     let mut chip8 = Chip8Flavor::Classic
