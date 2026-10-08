@@ -1,10 +1,10 @@
-use chip_8::machine::Chip8;
+use chip_8::machine::Chip8Flavor;
 use chip_8::windowing::{KeyListener, Updatable};
 
 use std::time::Duration;
 
 fn assert_rom_matches_expected(rom: &[u8], expected: &[u8], steps: usize) {
-    let mut chip8 = Chip8::from_rom(false, rom).unwrap();
+    let mut chip8 = Chip8Flavor::Classic.builder().load(rom).unwrap();
 
     for _ in 0..steps {
         chip8.update(Duration::from_millis(2)).unwrap();
@@ -14,7 +14,7 @@ fn assert_rom_matches_expected(rom: &[u8], expected: &[u8], steps: usize) {
 }
 
 fn assert_rom_matches_expected_duration(rom: &[u8], expected: &[u8], duration: Duration) {
-    let mut chip8 = Chip8::from_rom(false, rom).unwrap();
+    let mut chip8 = Chip8Flavor::Classic.builder().load(rom).unwrap();
 
     chip8.update(duration).unwrap();
 
@@ -60,8 +60,11 @@ fn flags() {
 #[test]
 fn quirks() {
     let expected = include_bytes!("fixtures/5-quirks.expected");
-    let mut chip8 =
-        Chip8::from_rom_with_quirk(false, include_bytes!("fixtures/5-quirks.ch8"), 1).unwrap();
+    let mut chip8 = Chip8Flavor::Classic
+        .builder()
+        .timendus(1)
+        .load(include_bytes!("fixtures/5-quirks.ch8"))
+        .unwrap();
 
     chip8.update(Duration::from_secs(5)).unwrap();
 
@@ -71,8 +74,11 @@ fn quirks() {
 #[test]
 fn quirks_superchip() {
     let expected = include_bytes!("fixtures/5-quirks.superchip.expected");
-    let mut chip8 =
-        Chip8::from_rom_with_quirk(true, include_bytes!("fixtures/5-quirks.ch8"), 2).unwrap();
+    let mut chip8 = Chip8Flavor::SuperChip
+        .builder()
+        .timendus(2)
+        .load(include_bytes!("fixtures/5-quirks.ch8"))
+        .unwrap();
 
     chip8.update(Duration::from_secs(5)).unwrap();
 
@@ -82,8 +88,11 @@ fn quirks_superchip() {
 #[test]
 fn keypad() {
     let expected = include_bytes!("fixtures/6-keypad.expected");
-    let mut chip8 =
-        Chip8::from_rom_with_quirk(false, include_bytes!("fixtures/6-keypad.ch8"), 3).unwrap();
+    let mut chip8 = Chip8Flavor::Classic
+        .builder()
+        .timendus(3)
+        .load(include_bytes!("fixtures/6-keypad.ch8"))
+        .unwrap();
 
     chip8.update(Duration::from_secs(1)).unwrap();
     chip8.event(winit::keyboard::KeyCode::Digit1, true);
@@ -97,8 +106,11 @@ fn keypad() {
 #[test]
 fn scroll_hires() {
     let expected = include_bytes!("fixtures/8-scrolling.hires.expected");
-    let mut chip8 =
-        Chip8::from_rom_with_quirk(true, include_bytes!("fixtures/8-scrolling.ch8"), 3).unwrap();
+    let mut chip8 = Chip8Flavor::SuperChip
+        .builder()
+        .timendus(3)
+        .load(include_bytes!("fixtures/8-scrolling.ch8"))
+        .unwrap();
 
     chip8.update(Duration::from_secs(1)).unwrap();
 
@@ -108,8 +120,11 @@ fn scroll_hires() {
 #[test]
 fn scroll_lowres() {
     let expected = include_bytes!("fixtures/8-scrolling.lowres.expected");
-    let mut chip8 =
-        Chip8::from_rom_with_quirk(true, include_bytes!("fixtures/8-scrolling.ch8"), 1).unwrap();
+    let mut chip8 = Chip8Flavor::SuperChip
+        .builder()
+        .timendus(1)
+        .load(include_bytes!("fixtures/8-scrolling.ch8"))
+        .unwrap();
 
     chip8.update(Duration::from_secs(1)).unwrap();
 

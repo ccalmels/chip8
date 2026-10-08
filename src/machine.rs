@@ -16,11 +16,94 @@ impl Rng for Random {
     }
 }
 
+pub struct Chip8Builder {
+    stack_in_memory: bool,
+    framebuffer_in_memory: bool,
+    frequency: u64,
+    timendus: u8,
+    quirks: Quirks,
+    step: fn(&mut Cpu, &mut Peripheral, &Random) -> Result<(), crate::Error>,
+}
+
+impl Chip8Builder {
+    pub fn frequency(mut self, frequency: u64) -> Self {
+        self.frequency = frequency;
+        self
+    }
+
+    pub fn timendus(mut self, timendus: u8) -> Self {
+        self.timendus = timendus;
+        self
+    }
+
+    pub fn load(self, rom: &[u8]) -> Result<Chip8, crate::Error> {
+        let start = Cpu::START_PC.value() as usize;
+        let fonts = Cpu::FONTS.value() as usize;
+        let capacity = MEMORY_LENGTH - start;
+
+        if rom.len() <= capacity {
+            let mut memory = vec![0; fonts];
+
+            memory.extend_from_slice(FONTS);
+            memory.extend_from_slice(HIRES_FONTS);
+            memory.resize(start - 1, 0);
+
+            memory.push(self.timendus);
+
+            memory.extend_from_slice(rom);
+            memory.resize(MEMORY_LENGTH, 0);
+
+            let component = Component {
+                cpu: Cpu::new(self.stack_in_memory, self.quirks),
+                peripheral: Peripheral::new(self.framebuffer_in_memory, memory.try_into().unwrap()),
+                rng: Random(),
+                step: self.step,
+            };
+            let ticker = Ticker::new(Duration::from_micros(1_000_000 / self.frequency));
+
+            Ok(Chip8 { component, ticker })
+        } else {
+            Err(Error::RomTooLarge {
+                size: rom.len(),
+                capacity,
+            })
+        }
+    }
+}
+
+pub enum Chip8Flavor {
+    Classic,
+    SuperChip,
+}
+
+impl Chip8Flavor {
+    pub fn builder(self) -> Chip8Builder {
+        match self {
+            Chip8Flavor::Classic => Chip8Builder {
+                stack_in_memory: true,
+                framebuffer_in_memory: true,
+                frequency: 500,
+                timendus: 0,
+                quirks: Quirks::classic(),
+                step: Cpu::step,
+            },
+            Chip8Flavor::SuperChip => Chip8Builder {
+                stack_in_memory: false,
+                framebuffer_in_memory: false,
+                frequency: 2_000,
+                timendus: 0,
+                quirks: Quirks::schip(),
+                step: Cpu::super_step,
+            },
+        }
+    }
+}
+
 struct Component {
     cpu: Cpu,
     peripheral: Peripheral,
     rng: Random,
-    is_superchip: bool,
+    step: fn(&mut Cpu, &mut Peripheral, &Random) -> Result<(), crate::Error>,
 }
 
 impl Tickable for Component {
@@ -30,11 +113,7 @@ impl Tickable for Component {
     const DT_TICK_TIMER: Duration = Duration::from_micros(1_000_000 / 60);
 
     fn tick(&mut self) -> Result<(), Self::Error> {
-        if self.is_superchip {
-            self.cpu.super_step(&mut self.peripheral, &self.rng)
-        } else {
-            self.cpu.step(&mut self.peripheral, &self.rng)
-        }
+        (self.step)(&mut self.cpu, &mut self.peripheral, &self.rng)
     }
 
     fn tick_timer(&mut self) {
@@ -87,56 +166,6 @@ const HIRES_FONTS: &[u8] = &[
 ];
 
 impl Chip8 {
-    pub fn from_rom_with_quirk(
-        is_superchip: bool,
-        rom: &[u8],
-        quirk: u8,
-    ) -> Result<Self, crate::Error> {
-        let start = Cpu::START_PC.value() as usize;
-        let fonts = Cpu::FONTS.value() as usize;
-        let capacity = MEMORY_LENGTH - start;
-
-        if rom.len() <= capacity {
-            let mut memory = vec![0; fonts];
-
-            memory.extend_from_slice(FONTS);
-            memory.extend_from_slice(HIRES_FONTS);
-            memory.resize(start - 1, 0);
-
-            memory.push(quirk);
-
-            memory.extend_from_slice(rom);
-            memory.resize(MEMORY_LENGTH, 0);
-
-            let quirks = if is_superchip {
-                Quirks::schip()
-            } else {
-                Quirks::classic()
-            };
-
-            let freq = if is_superchip { 2_000 } else { 500 };
-
-            let component = Component {
-                cpu: Cpu::new(!is_superchip, quirks),
-                peripheral: Peripheral::new(!is_superchip, memory.try_into().unwrap()),
-                rng: Random(),
-                is_superchip,
-            };
-            let ticker = Ticker::new(Duration::from_micros(1_000_000 / freq));
-
-            Ok(Self { component, ticker })
-        } else {
-            Err(Error::RomTooLarge {
-                size: rom.len(),
-                capacity,
-            })
-        }
-    }
-
-    pub fn from_rom(is_superchip: bool, rom: &[u8]) -> Result<Self, crate::Error> {
-        Self::from_rom_with_quirk(is_superchip, rom, 0)
-    }
-
     pub fn framebuffer(&self) -> &[u8] {
         self.component.peripheral.framebuffer()
     }
