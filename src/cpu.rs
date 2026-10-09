@@ -844,7 +844,9 @@ impl Cpu {
         peripheral: &mut P,
         rng: &R,
         opcode: OpCode,
-    ) {
+    ) -> bool {
+        let mut skip = false;
+
         match opcode {
             OpCode::Clear => peripheral.clear(),
             OpCode::Return => self.pc = self.stack.pop(peripheral),
@@ -853,21 +855,9 @@ impl Cpu {
                 self.stack.push(peripheral, self.pc);
                 self.pc = address
             }
-            OpCode::SkipEqual(v, value) => {
-                if self.vs[v] == value {
-                    self.pc = self.pc.wrapping_add(2)
-                }
-            }
-            OpCode::SkipNotEqual(v, value) => {
-                if self.vs[v] != value {
-                    self.pc = self.pc.wrapping_add(2)
-                }
-            }
-            OpCode::SkipRegistersEqual(x, y) => {
-                if self.vs[x] == self.vs[y] {
-                    self.pc = self.pc.wrapping_add(2)
-                }
-            }
+            OpCode::SkipEqual(v, value) => skip = self.vs[v] == value,
+            OpCode::SkipNotEqual(v, value) => skip = self.vs[v] != value,
+            OpCode::SkipRegistersEqual(x, y) => skip = self.vs[x] == self.vs[y],
             OpCode::Load(v, value) => self.vs[v] = value,
             OpCode::Inc(v, value) => self.vs[v] = self.vs[v].wrapping_add(value),
             OpCode::Set(x, y) => self.vs[x] = self.vs[y],
@@ -926,11 +916,7 @@ impl Cpu {
 
                 self.vs[0xf] = msb;
             }
-            OpCode::SkipRegistersNotEqual(x, y) => {
-                if self.vs[x] != self.vs[y] {
-                    self.pc = self.pc.wrapping_add(2)
-                }
-            }
+            OpCode::SkipRegistersNotEqual(x, y) => skip = self.vs[x] != self.vs[y],
             OpCode::LoadIndex(addr) => self.i = addr.into(),
             OpCode::Flow(addr) => {
                 if self.quirks.jumping {
@@ -951,16 +937,8 @@ impl Cpu {
 
                 self.vs[0xf] = peripheral.draw(self.vs[x], self.vs[y], &sprite[..n as usize]) as u8;
             }
-            OpCode::IsKey(x) => {
-                if peripheral.key_pressed(self.vs[x] & 0xf) {
-                    self.pc = self.pc.wrapping_add(2);
-                }
-            }
-            OpCode::IsNotKey(x) => {
-                if !peripheral.key_pressed(self.vs[x] & 0xf) {
-                    self.pc = self.pc.wrapping_add(2);
-                }
-            }
+            OpCode::IsKey(x) => skip = peripheral.key_pressed(self.vs[x] & 0xf),
+            OpCode::IsNotKey(x) => skip = !peripheral.key_pressed(self.vs[x] & 0xf),
             OpCode::SetDelay(x) => self.vs[x] = self.dt,
             OpCode::WaitKey(x) => {
                 if let Some(k) = peripheral.wait_key() {
@@ -1010,6 +988,8 @@ impl Cpu {
                 }
             }
         }
+
+        skip
     }
 
     fn super_execute<P: Memory + Display + Keypad + Beeper + SuperDisplay, R: Rng>(
@@ -1017,7 +997,7 @@ impl Cpu {
         peripheral: &mut P,
         rng: &R,
         opcode: SuperOpCode,
-    ) {
+    ) -> bool {
         match opcode {
             SuperOpCode::ScrollDown(n) => peripheral.scroll_down(n),
             SuperOpCode::ScrollRight => peripheral.scroll_right(),
@@ -1053,8 +1033,10 @@ impl Cpu {
                     self.vs[i] = self.storage[i as usize]
                 }
             }
-            SuperOpCode::Chip8(opcode) => self.execute(peripheral, rng, opcode),
+            SuperOpCode::Chip8(opcode) => return self.execute(peripheral, rng, opcode),
         }
+
+        false
     }
 
     fn xo_execute<P: Memory + Display + Keypad + Beeper + SuperDisplay, R: Rng>(
@@ -1062,10 +1044,12 @@ impl Cpu {
         peripheral: &mut P,
         rng: &R,
         opcode: XoOpCode,
-    ) {
+    ) -> bool {
         match opcode {
-            XoOpCode::SuperChip(opcode) => self.super_execute(peripheral, rng, opcode),
+            XoOpCode::SuperChip(opcode) => return self.super_execute(peripheral, rng, opcode),
         }
+
+        false
     }
 
     pub fn step<P: Memory + Display + Keypad + Beeper, R: Rng>(
@@ -1078,7 +1062,10 @@ impl Cpu {
 
         self.pc = self.pc.wrapping_add(2);
 
-        self.execute(peripheral, rng, opcode);
+        if self.execute(peripheral, rng, opcode) {
+            // Skip next opcode
+            self.pc = self.pc.wrapping_add(2);
+        }
 
         Ok(())
     }
@@ -1093,7 +1080,10 @@ impl Cpu {
 
         self.pc = self.pc.wrapping_add(2);
 
-        self.super_execute(peripheral, rng, opcode);
+        if self.super_execute(peripheral, rng, opcode) {
+            // Skip next opcode
+            self.pc = self.pc.wrapping_add(2);
+        }
 
         Ok(())
     }
@@ -1108,7 +1098,10 @@ impl Cpu {
 
         self.pc = self.pc.wrapping_add(2);
 
-        self.xo_execute(peripheral, rng, opcode);
+        if self.xo_execute(peripheral, rng, opcode) {
+            // Skip next opcode
+            self.pc = self.pc.wrapping_add(2);
+        }
 
         Ok(())
     }
