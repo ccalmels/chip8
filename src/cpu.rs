@@ -170,6 +170,7 @@ pub trait XoDisplay {
     const BOTH: u8 = 0b11;
 
     fn planes(&mut self, planes: u8);
+    fn both_planes(&self) -> bool;
 }
 
 fn opcode_split(opcode: u16) -> ((u8, u8, u8, u8), u8, u16) {
@@ -575,12 +576,16 @@ mod super_decode_tests {
 
 #[derive(PartialEq, Debug)]
 enum XoOpCode {
+    Draw16(u8, u8),
+    Draw(u8, u8, u8),
     Planes(u8),
     SuperChip(SuperOpCode),
 }
 
 fn xo_opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<XoOpCode> {
     match nibbles {
+        (0xd, x, y, 0) => Some(XoOpCode::Draw16(x, y)),
+        (0xd, x, y, n) => Some(XoOpCode::Draw(x, y, n)),
         (0xf, n, 0, 1) => Some(XoOpCode::Planes(n)),
         _ => super_opcode_match((nibbles, nn, nnn)).map(XoOpCode::SuperChip),
     }
@@ -630,6 +635,18 @@ mod xo_decode_tests {
     fn xo_decode_planes() {
         assert_eq!(xo_decode(0xf201), Ok(XoOpCode::Planes(2)));
         assert_eq!(xo_decode(0xfa01), Ok(XoOpCode::Planes(0xa)));
+    }
+
+    #[test]
+    fn xo_decode_draw16() {
+        assert_eq!(xo_decode(0xd1c0), Ok(XoOpCode::Draw16(1, 0xc)));
+        assert_eq!(xo_decode(0xda30), Ok(XoOpCode::Draw16(0xa, 3)));
+    }
+
+    #[test]
+    fn xo_decode_draw() {
+        assert_eq!(xo_decode(0xd123), Ok(XoOpCode::Draw(0x1, 0x2, 0x3)));
+        assert_eq!(xo_decode(0xdfed), Ok(XoOpCode::Draw(0xf, 0xe, 0xd)));
     }
 }
 
@@ -1069,6 +1086,36 @@ impl Cpu {
         opcode: XoOpCode,
     ) -> bool {
         match opcode {
+            XoOpCode::Draw16(x, y) => {
+                if peripheral.both_planes() {
+                    peripheral.planes(P::PLANE0);
+                    let flag = Self::draw16(peripheral, self.i, self.vs[x], self.vs[y]);
+                    peripheral.planes(P::PLANE1);
+                    self.vs[0xf] = flag
+                        | Self::draw16(peripheral, self.i.wrapping_add(32), self.vs[x], self.vs[y]);
+                    peripheral.planes(P::BOTH);
+                } else {
+                    self.vs[0xf] = Self::draw16(peripheral, self.i, self.vs[x], self.vs[y]);
+                }
+            }
+            XoOpCode::Draw(x, y, n) => {
+                if peripheral.both_planes() {
+                    peripheral.planes(P::PLANE0);
+                    let flag = Self::draw(peripheral, self.i, self.vs[x], self.vs[y], n);
+                    peripheral.planes(P::PLANE1);
+                    self.vs[0xf] = flag
+                        | Self::draw(
+                            peripheral,
+                            self.i.wrapping_add(n as u16),
+                            self.vs[x],
+                            self.vs[y],
+                            n,
+                        );
+                    peripheral.planes(P::BOTH);
+                } else {
+                    self.vs[0xf] = Self::draw(peripheral, self.i, self.vs[x], self.vs[y], n);
+                }
+            }
             XoOpCode::Planes(n) => peripheral.planes(n),
             XoOpCode::SuperChip(opcode) => return self.super_execute(peripheral, rng, opcode),
         }

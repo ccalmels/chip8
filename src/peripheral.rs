@@ -299,6 +299,14 @@ impl XoDisplay for Peripheral {
             fb.selected_planes = planes;
         }
     }
+
+    fn both_planes(&self) -> bool {
+        if let Some(fb) = &self.framebuffer {
+            fb.selected_planes == Self::BOTH
+        } else {
+            false
+        }
+    }
 }
 
 #[cfg(test)]
