@@ -575,11 +575,13 @@ mod super_decode_tests {
 
 #[derive(PartialEq, Debug)]
 enum XoOpCode {
+    Planes(u8),
     SuperChip(SuperOpCode),
 }
 
 fn xo_opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<XoOpCode> {
     match nibbles {
+        (0xf, n, 0, 1) => Some(XoOpCode::Planes(n)),
         _ => super_opcode_match((nibbles, nn, nnn)).map(XoOpCode::SuperChip),
     }
 }
@@ -622,6 +624,12 @@ mod xo_decode_tests {
             xo_decode(0x00ff),
             Ok(XoOpCode::SuperChip(SuperOpCode::HiRes))
         );
+    }
+
+    #[test]
+    fn xo_decode_planes() {
+        assert_eq!(xo_decode(0xf201), Ok(XoOpCode::Planes(2)));
+        assert_eq!(xo_decode(0xfa01), Ok(XoOpCode::Planes(0xa)));
     }
 }
 
@@ -1054,13 +1062,14 @@ impl Cpu {
         false
     }
 
-    fn xo_execute<P: Memory + Display + Keypad + Beeper + SuperDisplay, R: Rng>(
+    fn xo_execute<P: Memory + Display + Keypad + Beeper + SuperDisplay + XoDisplay, R: Rng>(
         &mut self,
         peripheral: &mut P,
         rng: &R,
         opcode: XoOpCode,
     ) -> bool {
         match opcode {
+            XoOpCode::Planes(n) => peripheral.planes(n),
             XoOpCode::SuperChip(opcode) => return self.super_execute(peripheral, rng, opcode),
         }
 
@@ -1103,7 +1112,7 @@ impl Cpu {
         Ok(())
     }
 
-    pub fn xo_step<P: Memory + Display + Keypad + Beeper + SuperDisplay, R: Rng>(
+    pub fn xo_step<P: Memory + Display + Keypad + Beeper + SuperDisplay + XoDisplay, R: Rng>(
         &mut self,
         peripheral: &mut P,
         rng: &R,
