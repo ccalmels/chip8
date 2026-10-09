@@ -578,6 +578,8 @@ mod super_decode_tests {
 #[derive(PartialEq, Debug)]
 enum XoOpCode {
     ScrollUp(u8),
+    Store(u8, u8),
+    Load(u8, u8),
     Draw16(u8, u8),
     Draw(u8, u8, u8),
     Planes(u8),
@@ -587,6 +589,8 @@ enum XoOpCode {
 fn xo_opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<XoOpCode> {
     match nibbles {
         (0, 0, 0xd, n) => Some(XoOpCode::ScrollUp(n)),
+        (5, x, y, 2) => Some(XoOpCode::Store(x, y)),
+        (5, x, y, 3) => Some(XoOpCode::Load(x, y)),
         (0xd, x, y, 0) => Some(XoOpCode::Draw16(x, y)),
         (0xd, x, y, n) => Some(XoOpCode::Draw(x, y, n)),
         (0xf, n, 0, 1) => Some(XoOpCode::Planes(n)),
@@ -656,6 +660,18 @@ mod xo_decode_tests {
     fn xo_decode_scroll_up() {
         assert_eq!(xo_decode(0x00d2), Ok(XoOpCode::ScrollUp(2)));
         assert_eq!(xo_decode(0x00da), Ok(XoOpCode::ScrollUp(0xa)));
+    }
+
+    #[test]
+    fn xo_decode_load() {
+        assert_eq!(xo_decode(0x5123), Ok(XoOpCode::Load(1, 2)));
+        assert_eq!(xo_decode(0x5fe3), Ok(XoOpCode::Load(0xf, 0xe)));
+    }
+
+    #[test]
+    fn xo_decode_store() {
+        assert_eq!(xo_decode(0x5122), Ok(XoOpCode::Store(1, 2)));
+        assert_eq!(xo_decode(0x5fe2), Ok(XoOpCode::Store(0xf, 0xe)));
     }
 }
 
@@ -1096,6 +1112,32 @@ impl Cpu {
     ) -> bool {
         match opcode {
             XoOpCode::ScrollUp(n) => peripheral.scroll_up(n),
+            XoOpCode::Store(x, y) => {
+                let mut dest = self.i;
+                let range: &mut dyn Iterator<Item = _> = if y < x {
+                    &mut (y..=x).rev()
+                } else {
+                    &mut (x..=y)
+                };
+
+                for i in range {
+                    peripheral.write(dest, self.vs[i]);
+                    dest = dest.wrapping_add(1);
+                }
+            }
+            XoOpCode::Load(x, y) => {
+                let mut src = self.i;
+                let range: &mut dyn Iterator<Item = _> = if y < x {
+                    &mut (y..=x).rev()
+                } else {
+                    &mut (x..=y)
+                };
+
+                for i in range {
+                    self.vs[i] = peripheral.read(src);
+                    src = src.wrapping_add(1);
+                }
+            }
             XoOpCode::Draw16(x, y) => {
                 if peripheral.both_planes() {
                     peripheral.planes(P::PLANE0);
