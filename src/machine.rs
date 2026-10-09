@@ -1,6 +1,6 @@
 use crate::Error;
 use crate::cpu::{Cpu, Quirks, Rng};
-use crate::peripheral::{FRAMEBUFFER_SIZE, HEIGHT, MEMORY_SIZE, Peripheral, WIDTH, XO_MEMORY_SIZE};
+use crate::peripheral::{HEIGHT, MEMORY_SIZE, Peripheral, WIDTH, XO_MEMORY_SIZE};
 use crate::ticker::{Tickable, Ticker};
 use crate::windowing::{KeyListener, Renderable, Updatable};
 
@@ -190,16 +190,33 @@ impl Chip8 {
 
 const ORANGE: [u8; 4] = [0xff, 0x95, 0x0, 0xff];
 const WHITE: [u8; 4] = [0xff; 4];
+const DARK: [u8; 4] = [0x80, 0x50, 0x0, 0xff];
+const GREY: [u8; 4] = [0xb0, 0x80, 0x0, 0xff];
 
-fn pixel_color(framebuffer: &[u8], i: usize) -> [u8; 4] {
+fn pixel_color((plane0, plane1): (&[u8], &[u8]), i: usize) -> [u8; 4] {
     let bit = 7 - i % 8;
     let index = i / 8;
-    let line = framebuffer[index];
 
-    if (line & (1 << bit)) != 0 {
-        ORANGE
+    let mut color = if plane0[index] & (1 << bit) == 0 {
+        0b00
     } else {
-        WHITE
+        0b01
+    };
+
+    if !plane1.is_empty() {
+        color |= if plane1[index] & (1 << bit) == 0 {
+            0b00
+        } else {
+            0b10
+        };
+    }
+
+    match color {
+        0b00 => ORANGE,
+        0b01 => WHITE,
+        0b10 => GREY,
+        0b11 => DARK,
+        _ => panic!(),
     }
 }
 
@@ -208,10 +225,8 @@ impl Renderable for Chip8 {
     const HEIGHT: u32 = HEIGHT as u32;
 
     fn render(&self, pixels: &mut Pixels<'_>) {
-        let framebuffer = self.framebuffer().0;
-
         // We can resize every time because if it's equal it's a noop function
-        if framebuffer.len() == FRAMEBUFFER_SIZE {
+        if !self.component.peripheral.is_hi_res() {
             pixels.resize_buffer(Self::WIDTH, Self::HEIGHT).unwrap();
         } else {
             pixels
@@ -222,7 +237,7 @@ impl Renderable for Chip8 {
         let (chunks, _remainders) = pixels.frame_mut().as_chunks_mut::<4>();
 
         for (i, pixel) in chunks.iter_mut().enumerate() {
-            pixel.copy_from_slice(&pixel_color(framebuffer, i));
+            pixel.copy_from_slice(&pixel_color(self.framebuffer(), i));
         }
     }
 }
@@ -285,11 +300,15 @@ mod pixel_color_tests {
         fb[0] = 0b10000000;
         fb[1] = 0b00001000;
 
-        assert_eq!(pixel_color(&fb, 0), ORANGE);
-        assert_eq!(pixel_color(&fb, 12), ORANGE);
+        assert_eq!(pixel_color((&fb, &[0; 0]), 0), WHITE);
+        assert_eq!(pixel_color((&fb, &[0; 0]), 12), WHITE);
 
         for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15] {
-            assert_eq!(pixel_color(&fb, i), WHITE, "pixel {i} should be white");
+            assert_eq!(
+                pixel_color((&fb, &[0; 0]), i),
+                ORANGE,
+                "pixel {i} should be white"
+            );
         }
     }
 }

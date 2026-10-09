@@ -110,7 +110,7 @@ impl Peripheral {
         ret
     }
 
-    fn is_hi_res(&self) -> bool {
+    pub fn is_hi_res(&self) -> bool {
         if let Some(fb) = &self.framebuffer {
             fb.is_hi_res
         } else {
