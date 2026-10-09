@@ -307,6 +307,22 @@ impl XoDisplay for Peripheral {
             false
         }
     }
+
+    fn scroll_up(&mut self, n: u8) {
+        let selected_planes = self.selected_planes();
+        let to_scroll = self.width_in_u8() * n as usize;
+        let (plane0, plane1) = self.framebuffer_mut();
+        let len = plane0.len();
+
+        if selected_planes & 0b01 != 0 {
+            plane0.copy_within(to_scroll..len, 0);
+            plane0[len - to_scroll..].fill(0);
+        }
+        if selected_planes & 0b10 != 0 {
+            plane1.copy_within(to_scroll..len, 0);
+            plane1[len - to_scroll..].fill(0);
+        }
+    }
 }
 
 #[cfg(test)]

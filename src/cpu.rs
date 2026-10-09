@@ -171,6 +171,7 @@ pub trait XoDisplay {
 
     fn planes(&mut self, planes: u8);
     fn both_planes(&self) -> bool;
+    fn scroll_up(&mut self, n: u8);
 }
 
 fn opcode_split(opcode: u16) -> ((u8, u8, u8, u8), u8, u16) {
@@ -576,6 +577,7 @@ mod super_decode_tests {
 
 #[derive(PartialEq, Debug)]
 enum XoOpCode {
+    ScrollUp(u8),
     Draw16(u8, u8),
     Draw(u8, u8, u8),
     Planes(u8),
@@ -584,6 +586,7 @@ enum XoOpCode {
 
 fn xo_opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<XoOpCode> {
     match nibbles {
+        (0, 0, 0xd, n) => Some(XoOpCode::ScrollUp(n)),
         (0xd, x, y, 0) => Some(XoOpCode::Draw16(x, y)),
         (0xd, x, y, n) => Some(XoOpCode::Draw(x, y, n)),
         (0xf, n, 0, 1) => Some(XoOpCode::Planes(n)),
@@ -647,6 +650,12 @@ mod xo_decode_tests {
     fn xo_decode_draw() {
         assert_eq!(xo_decode(0xd123), Ok(XoOpCode::Draw(0x1, 0x2, 0x3)));
         assert_eq!(xo_decode(0xdfed), Ok(XoOpCode::Draw(0xf, 0xe, 0xd)));
+    }
+
+    #[test]
+    fn xo_decode_scroll_up() {
+        assert_eq!(xo_decode(0x00d2), Ok(XoOpCode::ScrollUp(2)));
+        assert_eq!(xo_decode(0x00da), Ok(XoOpCode::ScrollUp(0xa)));
     }
 }
 
@@ -1086,6 +1095,7 @@ impl Cpu {
         opcode: XoOpCode,
     ) -> bool {
         match opcode {
+            XoOpCode::ScrollUp(n) => peripheral.scroll_up(n),
             XoOpCode::Draw16(x, y) => {
                 if peripheral.both_planes() {
                     peripheral.planes(P::PLANE0);

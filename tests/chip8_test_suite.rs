@@ -144,3 +144,31 @@ fn scroll_lowres() {
 
     assert_eq!(chip8.framebuffer().0, expected);
 }
+
+#[test]
+fn xo_scroll_hires() {
+    let expected = include_bytes!("fixtures/8-scrolling.hires.xo.expected");
+    let mut chip8 = Chip8Flavor::Xo
+        .builder()
+        .timendus(5)
+        .load(include_bytes!("fixtures/8-scrolling.ch8"))
+        .unwrap();
+
+    chip8.update(Duration::from_secs(1)).unwrap();
+
+    assert_eq!(chip8.framebuffer().0, expected);
+}
+
+#[test]
+fn xo_scroll_lowres() {
+    let expected = include_bytes!("fixtures/8-scrolling.lowres.xo.expected");
+    let mut chip8 = Chip8Flavor::Xo
+        .builder()
+        .timendus(4)
+        .load(include_bytes!("fixtures/8-scrolling.ch8"))
+        .unwrap();
+
+    chip8.update(Duration::from_secs(1)).unwrap();
+
+    assert_eq!(chip8.framebuffer().0, expected);
+}
