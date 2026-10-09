@@ -839,6 +839,16 @@ impl Cpu {
         }
     }
 
+    fn draw<P: Display + Memory>(peripheral: &mut P, i: Address<16>, x: u8, y: u8, n: u8) -> u8 {
+        let mut sprite = [0u8; 15];
+
+        for (row, byte) in sprite.iter_mut().enumerate().take(n as usize) {
+            *byte = peripheral.read(i.wrapping_add(row as u16));
+        }
+
+        peripheral.draw(x, y, &sprite[..n as usize]) as u8
+    }
+
     fn execute<P: Memory + Display + Keypad + Beeper, R: Rng>(
         &mut self,
         peripheral: &mut P,
@@ -929,13 +939,7 @@ impl Cpu {
             }
             OpCode::Rand(x, nn) => self.vs[x] = rng.next() & nn,
             OpCode::Draw(x, y, n) => {
-                let mut sprite = [0u8; 15];
-
-                for (row, byte) in sprite.iter_mut().enumerate().take(n as usize) {
-                    *byte = peripheral.read(self.i.wrapping_add(row as u16));
-                }
-
-                self.vs[0xf] = peripheral.draw(self.vs[x], self.vs[y], &sprite[..n as usize]) as u8;
+                self.vs[0xf] = Self::draw(peripheral, self.i, self.vs[x], self.vs[y], n)
             }
             OpCode::IsKey(x) => skip = peripheral.key_pressed(self.vs[x] & 0xf),
             OpCode::IsNotKey(x) => skip = !peripheral.key_pressed(self.vs[x] & 0xf),
@@ -992,6 +996,22 @@ impl Cpu {
         skip
     }
 
+    fn draw16<P: Display + Memory>(peripheral: &mut P, i: Address<16>, x: u8, y: u8) -> u8 {
+        let mut sprite = [0u8; 16];
+
+        for (row, byte) in sprite.iter_mut().enumerate() {
+            *byte = peripheral.read(i.wrapping_add(2 * row as u16));
+        }
+
+        let flag = peripheral.draw(x, y, &sprite) as u8;
+
+        for (row, byte) in sprite.iter_mut().enumerate() {
+            *byte = peripheral.read(i.wrapping_add(1 + 2 * row as u16));
+        }
+
+        flag | peripheral.draw(x.wrapping_add(8), y, &sprite) as u8
+    }
+
     fn super_execute<P: Memory + Display + Keypad + Beeper + SuperDisplay, R: Rng>(
         &mut self,
         peripheral: &mut P,
@@ -1005,20 +1025,7 @@ impl Cpu {
             SuperOpCode::LowRes => peripheral.switch_resolution(false),
             SuperOpCode::HiRes => peripheral.switch_resolution(true),
             SuperOpCode::Draw16(x, y) => {
-                let mut sprite = [0u8; 16];
-
-                for (row, byte) in sprite.iter_mut().enumerate() {
-                    *byte = peripheral.read(self.i.wrapping_add(2 * row as u16));
-                }
-
-                let flag = peripheral.draw(self.vs[x], self.vs[y], &sprite) as u8;
-
-                for (row, byte) in sprite.iter_mut().enumerate() {
-                    *byte = peripheral.read(self.i.wrapping_add(1 + 2 * row as u16));
-                }
-
-                self.vs[0xf] =
-                    flag | peripheral.draw(self.vs[x].wrapping_add(8), self.vs[y], &sprite) as u8;
+                self.vs[0xf] = Self::draw16(peripheral, self.i, self.vs[x], self.vs[y])
             }
             SuperOpCode::HiSprite(x) => {
                 self.i = Self::HI_FONTS.wrapping_add((self.vs[x] as u16 & 0xf) * 10)
