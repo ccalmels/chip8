@@ -582,6 +582,7 @@ enum XoOpCode {
     Load(u8, u8),
     Draw16(u8, u8),
     Draw(u8, u8, u8),
+    Index16,
     Planes(u8),
     SuperChip(SuperOpCode),
 }
@@ -593,6 +594,7 @@ fn xo_opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<Xo
         (5, x, y, 3) => Some(XoOpCode::Load(x, y)),
         (0xd, x, y, 0) => Some(XoOpCode::Draw16(x, y)),
         (0xd, x, y, n) => Some(XoOpCode::Draw(x, y, n)),
+        (0xf, 0, 0, 0) => Some(XoOpCode::Index16),
         (0xf, n, 0, 1) => Some(XoOpCode::Planes(n)),
         _ => super_opcode_match((nibbles, nn, nnn)).map(XoOpCode::SuperChip),
     }
@@ -672,6 +674,11 @@ mod xo_decode_tests {
     fn xo_decode_store() {
         assert_eq!(xo_decode(0x5122), Ok(XoOpCode::Store(1, 2)));
         assert_eq!(xo_decode(0x5fe2), Ok(XoOpCode::Store(0xf, 0xe)));
+    }
+
+    #[test]
+    fn xo_decode_index16() {
+        assert_eq!(xo_decode(0xf000), Ok(XoOpCode::Index16));
     }
 }
 
@@ -1168,6 +1175,12 @@ impl Cpu {
                     self.vs[0xf] = Self::draw(peripheral, self.i, self.vs[x], self.vs[y], n);
                 }
             }
+            XoOpCode::Index16 => {
+                let nnnn = fetch(peripheral, self.pc);
+
+                self.i = Address::<16>::new(nnnn);
+                self.pc = self.pc.wrapping_add(2);
+            }
             XoOpCode::Planes(n) => peripheral.planes(n),
             XoOpCode::SuperChip(opcode) => return self.super_execute(peripheral, rng, opcode),
         }
@@ -1223,7 +1236,12 @@ impl Cpu {
 
         if self.xo_execute(peripheral, rng, opcode) {
             // Skip next opcode
-            self.pc = self.pc.wrapping_add(2);
+            let next_opcode = fetch(peripheral, self.pc);
+            if next_opcode == 0xf000 {
+                self.pc = self.pc.wrapping_add(4);
+            } else {
+                self.pc = self.pc.wrapping_add(2);
+            }
         }
 
         Ok(())
