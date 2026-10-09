@@ -183,7 +183,7 @@ const HIRES_FONTS: &[u8] = &[
 ];
 
 impl Chip8 {
-    pub fn framebuffer(&self) -> &[u8] {
+    pub fn framebuffer(&self) -> (&[u8], &[u8]) {
         self.component.peripheral.framebuffer()
     }
 }
@@ -208,7 +208,7 @@ impl Renderable for Chip8 {
     const HEIGHT: u32 = HEIGHT as u32;
 
     fn render(&self, pixels: &mut Pixels<'_>) {
-        let framebuffer = self.framebuffer();
+        let framebuffer = self.framebuffer().0;
 
         // We can resize every time because if it's equal it's a noop function
         if framebuffer.len() == FRAMEBUFFER_SIZE {
@@ -257,11 +257,12 @@ impl KeyListener for Chip8 {
             winit::keyboard::KeyCode::PrintScreen => {
                 if !is_pressed {
                     const SCREENSHOT_PATH: &str = "/tmp/framebuffer.data";
+                    let (plane0, plane1) = self.framebuffer();
 
                     println!(
                         "Saving framebuffer in {}: {:?}",
                         SCREENSHOT_PATH,
-                        std::fs::write(SCREENSHOT_PATH, self.framebuffer())
+                        std::fs::write(SCREENSHOT_PATH, [plane0, plane1].concat())
                     );
                 }
                 return;

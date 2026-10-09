@@ -15,24 +15,31 @@ pub const MEMORY_SIZE: usize = 0x1000;
 pub const XO_MEMORY_SIZE: usize = 0x10000;
 
 struct InternalFrameBuffer {
-    data: [u8; HIRES_FRAMEBUFFER_SIZE],
+    plane0: [u8; HIRES_FRAMEBUFFER_SIZE],
+    plane1: [u8; HIRES_FRAMEBUFFER_SIZE],
     is_hi_res: bool,
 }
 
 impl InternalFrameBuffer {
-    fn get(&self) -> &[u8] {
+    fn planes(&self) -> (&[u8], &[u8]) {
         if self.is_hi_res {
-            &self.data
+            (&self.plane0, &self.plane1)
         } else {
-            &self.data[..FRAMEBUFFER_SIZE]
+            (
+                &self.plane0[..FRAMEBUFFER_SIZE],
+                &self.plane1[..FRAMEBUFFER_SIZE],
+            )
         }
     }
 
-    fn get_mut(&mut self) -> &mut [u8] {
+    fn planes_mut(&mut self) -> (&mut [u8], &mut [u8]) {
         if self.is_hi_res {
-            &mut self.data
+            (&mut self.plane0, &mut self.plane1)
         } else {
-            &mut self.data[..FRAMEBUFFER_SIZE]
+            (
+                &mut self.plane0[..FRAMEBUFFER_SIZE],
+                &mut self.plane1[..FRAMEBUFFER_SIZE],
+            )
         }
     }
 }
@@ -55,7 +62,8 @@ impl Peripheral {
                 None
             } else {
                 Some(InternalFrameBuffer {
-                    data: [0; HIRES_FRAMEBUFFER_SIZE],
+                    plane0: [0; HIRES_FRAMEBUFFER_SIZE],
+                    plane1: [0; HIRES_FRAMEBUFFER_SIZE],
                     is_hi_res: false,
                 })
             },
@@ -63,26 +71,29 @@ impl Peripheral {
         }
     }
 
-    pub fn framebuffer(&self) -> &[u8] {
+    pub fn framebuffer(&self) -> (&[u8], &[u8]) {
         if let Some(fb) = &self.framebuffer {
-            fb.get()
+            fb.planes()
         } else {
-            &self.memory[FRAMEBUFFER_START..FRAMEBUFFER_END]
+            (&self.memory[FRAMEBUFFER_START..FRAMEBUFFER_END], &[0; 0])
         }
     }
 
-    fn framebuffer_mut(&mut self) -> &mut [u8] {
+    fn framebuffer_mut(&mut self) -> (&mut [u8], &mut [u8]) {
         if let Some(fb) = &mut self.framebuffer {
-            fb.get_mut()
+            fb.planes_mut()
         } else {
-            &mut self.memory[FRAMEBUFFER_START..FRAMEBUFFER_END]
+            (
+                &mut self.memory[FRAMEBUFFER_START..FRAMEBUFFER_END],
+                &mut [0; 0],
+            )
         }
     }
 
     fn draw_one(&mut self, index: usize, s: u8) -> bool {
-        let ret = self.framebuffer()[index] & s != 0x0;
+        let ret = self.framebuffer().0[index] & s != 0x0;
 
-        self.framebuffer_mut()[index] ^= s;
+        self.framebuffer_mut().0[index] ^= s;
 
         ret
     }
@@ -108,7 +119,7 @@ impl Memory for Peripheral {
 
 impl Display for Peripheral {
     fn clear(&mut self) {
-        self.framebuffer_mut().fill(0);
+        self.framebuffer_mut().0.fill(0);
     }
 
     fn draw(&mut self, x: u8, y: u8, sprite: &[u8]) -> bool {
@@ -209,7 +220,7 @@ impl SuperDisplay for Peripheral {
         } else {
             WIDTH_IN_U8 * n as usize
         };
-        let framebuffer = self.framebuffer_mut();
+        let framebuffer = self.framebuffer_mut().0;
 
         framebuffer.copy_within(..framebuffer.len() - to_scroll, to_scroll);
         framebuffer[..to_scroll].fill(0);
@@ -217,17 +228,17 @@ impl SuperDisplay for Peripheral {
 
     fn scroll_right(&mut self) {
         if self.is_hi_res() {
-            scroll(self.framebuffer_mut(), WIDTH_IN_U8 * 2, scroll_line_right);
+            scroll(self.framebuffer_mut().0, WIDTH_IN_U8 * 2, scroll_line_right);
         } else {
-            scroll(self.framebuffer_mut(), WIDTH_IN_U8, scroll_line_right);
+            scroll(self.framebuffer_mut().0, WIDTH_IN_U8, scroll_line_right);
         }
     }
 
     fn scroll_left(&mut self) {
         if self.is_hi_res() {
-            scroll(self.framebuffer_mut(), WIDTH_IN_U8 * 2, scroll_line_left);
+            scroll(self.framebuffer_mut().0, WIDTH_IN_U8 * 2, scroll_line_left);
         } else {
-            scroll(self.framebuffer_mut(), WIDTH_IN_U8, scroll_line_left);
+            scroll(self.framebuffer_mut().0, WIDTH_IN_U8, scroll_line_left);
         }
     }
 }
@@ -255,7 +266,7 @@ mod peripheral_tests {
 
         p.clear();
 
-        assert_eq!(p.framebuffer(), [0; FRAMEBUFFER_SIZE]);
+        assert_eq!(p.framebuffer().0, [0; FRAMEBUFFER_SIZE]);
         assert_eq!(p.memory[..], [0xff; MEMORY_SIZE]);
     }
 

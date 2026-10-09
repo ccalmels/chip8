@@ -10,7 +10,7 @@ fn assert_rom_matches_expected(rom: &[u8], expected: &[u8], steps: usize) {
         chip8.update(Duration::from_millis(2)).unwrap();
     }
 
-    assert_eq!(chip8.framebuffer(), expected);
+    assert_eq!(chip8.framebuffer().0, expected);
 }
 
 fn assert_rom_matches_expected_duration(rom: &[u8], expected: &[u8], duration: Duration) {
@@ -18,7 +18,7 @@ fn assert_rom_matches_expected_duration(rom: &[u8], expected: &[u8], duration: D
 
     chip8.update(duration).unwrap();
 
-    assert_eq!(chip8.framebuffer(), expected);
+    assert_eq!(chip8.framebuffer().0, expected);
 }
 
 #[test]
@@ -68,7 +68,7 @@ fn quirks() {
 
     chip8.update(Duration::from_secs(5)).unwrap();
 
-    assert_eq!(chip8.framebuffer(), expected);
+    assert_eq!(chip8.framebuffer().0, expected);
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn quirks_superchip() {
 
     chip8.update(Duration::from_secs(5)).unwrap();
 
-    assert_eq!(chip8.framebuffer(), expected);
+    assert_eq!(chip8.framebuffer().0, expected);
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn quirks_xo() {
 
     chip8.update(Duration::from_secs(5)).unwrap();
 
-    assert_eq!(chip8.framebuffer(), expected);
+    assert_eq!(chip8.framebuffer().0, expected);
 }
 
 #[test]
@@ -114,7 +114,7 @@ fn keypad() {
     chip8.event(winit::keyboard::KeyCode::Digit1, false);
     chip8.update(Duration::from_secs(1)).unwrap();
 
-    assert_eq!(chip8.framebuffer(), expected);
+    assert_eq!(chip8.framebuffer().0, expected);
 }
 
 #[test]
@@ -128,7 +128,7 @@ fn scroll_hires() {
 
     chip8.update(Duration::from_secs(1)).unwrap();
 
-    assert_eq!(chip8.framebuffer(), expected);
+    assert_eq!(chip8.framebuffer().0, expected);
 }
 
 #[test]
@@ -142,5 +142,5 @@ fn scroll_lowres() {
 
     chip8.update(Duration::from_secs(1)).unwrap();
 
-    assert_eq!(chip8.framebuffer(), expected);
+    assert_eq!(chip8.framebuffer().0, expected);
 }
