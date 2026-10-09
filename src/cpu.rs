@@ -164,6 +164,14 @@ pub trait SuperDisplay {
     fn scroll_left(&mut self);
 }
 
+pub trait XoDisplay {
+    const PLANE0: u8 = 0b01;
+    const PLANE1: u8 = 0b10;
+    const BOTH: u8 = 0b11;
+
+    fn planes(&mut self, planes: u8);
+}
+
 fn opcode_split(opcode: u16) -> ((u8, u8, u8, u8), u8, u16) {
     let nibbles = (
         (opcode >> 12) as u8,

@@ -1,6 +1,6 @@
 use crate::ca555::Ca555;
 use crate::cd4515::Cd4515;
-use crate::cpu::{Address, Beeper, Display, Keypad, Memory, SuperDisplay};
+use crate::cpu::{Address, Beeper, Display, Keypad, Memory, SuperDisplay, XoDisplay};
 
 const PIXEL_PER_U8: usize = 8;
 pub const WIDTH: u8 = 64;
@@ -18,6 +18,7 @@ struct InternalFrameBuffer {
     plane0: [u8; HIRES_FRAMEBUFFER_SIZE],
     plane1: [u8; HIRES_FRAMEBUFFER_SIZE],
     is_hi_res: bool,
+    selected_planes: u8,
 }
 
 impl InternalFrameBuffer {
@@ -65,6 +66,7 @@ impl Peripheral {
                     plane0: [0; HIRES_FRAMEBUFFER_SIZE],
                     plane1: [0; HIRES_FRAMEBUFFER_SIZE],
                     is_hi_res: false,
+                    selected_planes: Self::PLANE0,
                 })
             },
             clipping,
@@ -91,9 +93,19 @@ impl Peripheral {
     }
 
     fn draw_one(&mut self, index: usize, s: u8) -> bool {
-        let ret = self.framebuffer().0[index] & s != 0x0;
+        let selected_planes = self.selected_planes();
+        let (plane0, plane1) = self.framebuffer_mut();
+        let mut ret = false;
 
-        self.framebuffer_mut().0[index] ^= s;
+        if selected_planes & Self::PLANE0 == Self::PLANE0 {
+            ret |= plane0[index] & s != 0x0;
+            plane0[index] ^= s;
+        }
+
+        if selected_planes & Self::PLANE1 == Self::PLANE1 {
+            ret |= plane1[index] & s != 0x0;
+            plane1[index] ^= s;
+        }
 
         ret
     }
@@ -103,6 +115,22 @@ impl Peripheral {
             fb.is_hi_res
         } else {
             false
+        }
+    }
+
+    fn selected_planes(&self) -> u8 {
+        if let Some(fb) = &self.framebuffer {
+            fb.selected_planes
+        } else {
+            Self::PLANE0
+        }
+    }
+
+    fn width_in_u8(&self) -> usize {
+        if self.is_hi_res() {
+            2 * WIDTH_IN_U8
+        } else {
+            WIDTH_IN_U8
         }
     }
 }
@@ -119,7 +147,16 @@ impl Memory for Peripheral {
 
 impl Display for Peripheral {
     fn clear(&mut self) {
-        self.framebuffer_mut().0.fill(0);
+        let selected_planes = self.selected_planes();
+        let (plane0, plane1) = self.framebuffer_mut();
+
+        if selected_planes & Self::PLANE0 == Self::PLANE0 {
+            plane0.fill(0);
+        }
+
+        if selected_planes & Self::PLANE1 == Self::PLANE1 {
+            plane1.fill(0);
+        }
     }
 
     fn draw(&mut self, x: u8, y: u8, sprite: &[u8]) -> bool {
@@ -215,30 +252,51 @@ impl SuperDisplay for Peripheral {
     }
 
     fn scroll_down(&mut self, n: u8) {
-        let to_scroll = if self.is_hi_res() {
-            WIDTH_IN_U8 * 2 * n as usize
-        } else {
-            WIDTH_IN_U8 * n as usize
-        };
-        let framebuffer = self.framebuffer_mut().0;
+        let selected_planes = self.selected_planes();
+        let to_scroll = self.width_in_u8() * n as usize;
+        let (plane0, plane1) = self.framebuffer_mut();
 
-        framebuffer.copy_within(..framebuffer.len() - to_scroll, to_scroll);
-        framebuffer[..to_scroll].fill(0);
+        if selected_planes & 0b01 != 0 {
+            plane0.copy_within(..plane0.len() - to_scroll, to_scroll);
+            plane0[..to_scroll].fill(0);
+        }
+        if selected_planes & 0b10 != 0 {
+            plane1.copy_within(..plane1.len() - to_scroll, to_scroll);
+            plane1[..to_scroll].fill(0);
+        }
     }
 
     fn scroll_right(&mut self) {
-        if self.is_hi_res() {
-            scroll(self.framebuffer_mut().0, WIDTH_IN_U8 * 2, scroll_line_right);
-        } else {
-            scroll(self.framebuffer_mut().0, WIDTH_IN_U8, scroll_line_right);
+        let width_in_u8 = self.width_in_u8();
+        let selected_planes = self.selected_planes();
+        let (plane0, plane1) = self.framebuffer_mut();
+
+        if selected_planes & 0b01 != 0 {
+            scroll(plane0, width_in_u8, scroll_line_right);
+        }
+        if selected_planes & 0b10 != 0 {
+            scroll(plane1, width_in_u8, scroll_line_right);
         }
     }
 
     fn scroll_left(&mut self) {
-        if self.is_hi_res() {
-            scroll(self.framebuffer_mut().0, WIDTH_IN_U8 * 2, scroll_line_left);
-        } else {
-            scroll(self.framebuffer_mut().0, WIDTH_IN_U8, scroll_line_left);
+        let width_in_u8 = self.width_in_u8();
+        let selected_planes = self.selected_planes();
+        let (plane0, plane1) = self.framebuffer_mut();
+
+        if selected_planes & 0b01 != 0 {
+            scroll(plane0, width_in_u8, scroll_line_left);
+        }
+        if selected_planes & 0b10 != 0 {
+            scroll(plane1, width_in_u8, scroll_line_left);
+        }
+    }
+}
+
+impl XoDisplay for Peripheral {
+    fn planes(&mut self, planes: u8) {
+        if let Some(fb) = &mut self.framebuffer {
+            fb.selected_planes = planes;
         }
     }
 }
@@ -446,5 +504,44 @@ mod peripheral_tests {
 
         assert_eq!(p.memory[..FRAMEBUFFER_START], [0x0; FRAMEBUFFER_START]);
         assert_eq!(p.memory[FRAMEBUFFER_START..FRAMEBUFFER_END], expected);
+    }
+
+    #[test]
+    fn draw_plane0() {
+        let mut p = Peripheral::new(false, true, vec![]);
+
+        assert_eq!(p.selected_planes(), Peripheral::PLANE0);
+
+        assert!(!p.draw(32, 16, &[0xde, 0xad]));
+
+        let mut expected = [0; FRAMEBUFFER_SIZE];
+
+        expected[16 * 8 + 4] = 0xde;
+        expected[17 * 8 + 4] = 0xad;
+
+        let (plane0, plane1) = p.framebuffer();
+
+        assert_eq!(plane0, expected);
+        assert_eq!(plane1, [0; FRAMEBUFFER_SIZE]);
+    }
+
+    #[test]
+    fn draw_plane1() {
+        let mut p = Peripheral::new(false, true, vec![]);
+
+        p.planes(Peripheral::PLANE1);
+        assert_eq!(p.selected_planes(), Peripheral::PLANE1);
+
+        assert!(!p.draw(32, 16, &[0xde, 0xad]));
+
+        let mut expected = [0; FRAMEBUFFER_SIZE];
+
+        expected[16 * 8 + 4] = 0xde;
+        expected[17 * 8 + 4] = 0xad;
+
+        let (plane0, plane1) = p.framebuffer();
+
+        assert_eq!(plane0, [0; FRAMEBUFFER_SIZE]);
+        assert_eq!(plane1, expected);
     }
 }
