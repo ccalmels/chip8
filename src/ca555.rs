@@ -1,6 +1,7 @@
 use rodio::source::Source;
 use rodio::stream::DeviceSinkBuilder;
 use rodio::{ChannelCount, MixerDeviceSink, Player, SampleRate};
+use std::time::Duration;
 
 struct XoSource {
     sample_rate: SampleRate,
@@ -118,7 +119,7 @@ impl Ca555 {
         self.st = st;
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self, delta: Duration) {
         if let Some(sink) = &self.beep {
             let samples = if self.st == 0 {
                 [0u8; 16]
@@ -126,8 +127,7 @@ impl Ca555 {
                 self.pattern
             };
 
-            let sound = XoSource::new(self.pitch, samples)
-                .take_duration(std::time::Duration::from_micros(1_000_000 / 60));
+            let sound = XoSource::new(self.pitch, samples).take_duration(delta);
 
             sink.player.append(sound);
         }
