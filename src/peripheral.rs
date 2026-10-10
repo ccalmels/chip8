@@ -1,6 +1,6 @@
 use crate::ca555::Ca555;
 use crate::cd4515::Cd4515;
-use crate::cpu::{Address, Beeper, Display, Keypad, Memory, SuperDisplay, XoDisplay};
+use crate::cpu::{Address, Beeper, Display, Keypad, Memory, SuperDisplay, XoAudio, XoDisplay};
 
 const PIXEL_PER_U8: usize = 8;
 pub const WIDTH: u8 = 64;
@@ -322,6 +322,16 @@ impl XoDisplay for Peripheral {
             plane1.copy_within(to_scroll..len, 0);
             plane1[len - to_scroll..].fill(0);
         }
+    }
+}
+
+impl XoAudio for Peripheral {
+    fn pattern(&mut self, pattern: [u8; 16]) {
+        self.beeper.pattern(pattern);
+    }
+
+    fn pitch(&mut self, pitch: u8) {
+        self.beeper.pitch(pitch);
     }
 }
 

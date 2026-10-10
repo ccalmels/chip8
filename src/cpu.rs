@@ -174,6 +174,11 @@ pub trait XoDisplay {
     fn scroll_up(&mut self, n: u8);
 }
 
+pub trait XoAudio {
+    fn pattern(&mut self, pattern: [u8; 16]);
+    fn pitch(&mut self, pitch: u8);
+}
+
 fn opcode_split(opcode: u16) -> ((u8, u8, u8, u8), u8, u16) {
     let nibbles = (
         (opcode >> 12) as u8,
@@ -584,6 +589,8 @@ enum XoOpCode {
     Draw(u8, u8, u8),
     Index16,
     Planes(u8),
+    LoadAudio,
+    Pitch(u8),
     SuperChip(SuperOpCode),
 }
 
@@ -595,6 +602,8 @@ fn xo_opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<Xo
         (0xd, x, y, 0) => Some(XoOpCode::Draw16(x, y)),
         (0xd, x, y, n) => Some(XoOpCode::Draw(x, y, n)),
         (0xf, 0, 0, 0) => Some(XoOpCode::Index16),
+        (0xf, 0, 0, 2) => Some(XoOpCode::LoadAudio),
+        (0xf, x, 3, 0xa) => Some(XoOpCode::Pitch(x)),
         (0xf, n, 0, 1) => Some(XoOpCode::Planes(n)),
         _ => super_opcode_match((nibbles, nn, nnn)).map(XoOpCode::SuperChip),
     }
@@ -1111,7 +1120,10 @@ impl Cpu {
         false
     }
 
-    fn xo_execute<P: Memory + Display + Keypad + Beeper + SuperDisplay + XoDisplay, R: Rng>(
+    fn xo_execute<
+        P: Memory + Display + Keypad + Beeper + SuperDisplay + XoDisplay + XoAudio,
+        R: Rng,
+    >(
         &mut self,
         peripheral: &mut P,
         rng: &R,
@@ -1182,6 +1194,16 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(2);
             }
             XoOpCode::Planes(n) => peripheral.planes(n),
+            XoOpCode::LoadAudio => {
+                let mut pattern = [0; 16];
+
+                for (i, value) in pattern.iter_mut().enumerate() {
+                    *value = peripheral.read(self.i.wrapping_add(i as u16));
+                }
+
+                peripheral.pattern(pattern);
+            }
+            XoOpCode::Pitch(x) => peripheral.pitch(self.vs[x]),
             XoOpCode::SuperChip(opcode) => return self.super_execute(peripheral, rng, opcode),
         }
 
@@ -1224,7 +1246,10 @@ impl Cpu {
         Ok(())
     }
 
-    pub fn xo_step<P: Memory + Display + Keypad + Beeper + SuperDisplay + XoDisplay, R: Rng>(
+    pub fn xo_step<
+        P: Memory + Display + Keypad + Beeper + SuperDisplay + XoDisplay + XoAudio,
+        R: Rng,
+    >(
         &mut self,
         peripheral: &mut P,
         rng: &R,
