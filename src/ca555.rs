@@ -13,14 +13,14 @@ struct XoSource {
 impl XoSource {
     const MULTIPLIER: usize = 128;
 
-    fn new(pitch: u8, pattern: [u8; 16]) -> Self {
+    fn new(index: usize, pitch: u8, pattern: [u8; 16]) -> Self {
         let frequency = 4000.0 * 2f32.powf((pitch as f32 - 64.0) / 48.0);
         let sample_rate = SampleRate::new((Self::MULTIPLIER as f32 * frequency) as u32).unwrap();
 
         XoSource {
             sample_rate,
             pattern,
-            index: 0,
+            index,
             current_value: -0.1,
         }
     }
@@ -57,6 +57,7 @@ impl Iterator for XoSource {
     fn next(&mut self) -> Option<Self::Item> {
         if self.index.is_multiple_of(Self::MULTIPLIER) {
             let bit = self.index / Self::MULTIPLIER;
+            let bit = bit % 128;
 
             self.current_value = if Self::bit_is_set(&self.pattern, bit) {
                 0.1
@@ -66,10 +67,6 @@ impl Iterator for XoSource {
         }
 
         self.index += 1;
-
-        if self.index >= 128 * Self::MULTIPLIER {
-            self.index = 0;
-        }
 
         Some(self.current_value)
     }
@@ -85,6 +82,7 @@ pub struct Ca555 {
     st: u8,
     pattern: [u8; 16],
     pitch: u8,
+    start_index: usize,
 }
 
 impl Ca555 {
@@ -104,6 +102,7 @@ impl Ca555 {
                 st: 0,
                 pattern: [0xf0; 16],
                 pitch: 64,
+                start_index: 0,
             }
         } else {
             Self {
@@ -111,6 +110,7 @@ impl Ca555 {
                 st: 0,
                 pattern: [0; 16],
                 pitch: 0,
+                start_index: 0,
             }
         }
     }
@@ -127,13 +127,17 @@ impl Ca555 {
                 self.pattern
             };
 
-            let sound = XoSource::new(self.pitch, samples).take_duration(delta);
+            let sound = XoSource::new(self.start_index, self.pitch, samples).take_duration(delta);
+
+            self.start_index += sound.current_span_len().unwrap();
 
             sink.player.append(sound);
         }
 
         if self.st > 0 {
             self.st -= 1;
+        } else {
+            self.start_index = 0;
         }
     }
 
