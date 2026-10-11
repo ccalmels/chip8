@@ -39,6 +39,11 @@ impl Chip8Builder {
         self
     }
 
+    pub fn clipping(mut self, clipping: bool) -> Self {
+        self.clipping = clipping;
+        self
+    }
+
     pub fn load(self, rom: &[u8]) -> Result<Chip8, crate::Error> {
         let start = Cpu::START_PC.value() as usize;
         let fonts = Cpu::FONTS.value() as usize;
@@ -56,11 +61,15 @@ impl Chip8Builder {
             memory.extend_from_slice(rom);
             memory.resize(self.memory_size, 0);
 
-            let screen = if self.double_buffer { Some(Screen {
+            let screen = if self.double_buffer {
+                Some(Screen {
                     is_hi_res: false,
                     plane0: vec![],
                     plane1: vec![],
-            }) } else { None };
+                })
+            } else {
+                None
+            };
 
             let component = Component {
                 cpu: Cpu::new(self.stack_in_memory, self.quirks),

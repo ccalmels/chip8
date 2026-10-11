@@ -15,6 +15,10 @@ struct Cli {
     /// Frequency
     #[arg(short, long)]
     frequency: Option<u64>,
+
+    /// Clipping
+    #[arg(short, long)]
+    clipping: Option<bool>,
 }
 
 #[derive(Args)]
@@ -43,6 +47,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .frequency
         .into_iter()
         .fold(flavor.builder(), Chip8Builder::frequency);
+
+    let builder = args
+        .clipping
+        .into_iter()
+        .fold(builder, Chip8Builder::clipping);
 
     let mut app = App::new(builder.load(&rom)?);
 
