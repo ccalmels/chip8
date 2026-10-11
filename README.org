@@ -1,11 +1,11 @@
 * Chip-8 interpreter
 ** Design
 *** Memory
-Originaly 4K, 512 first bytes are used for the interpreter.
+Originally 4K, 512 first bytes are used for the interpreter.
 Last 256 bytes are used for display refresh. The 96 bytes below were used for call stack.
 | start |   end | size | usage       |
 |-------+-------+------+-------------|
-| 0x000 | 0x1FF |  512 | intepreter  |
+| 0x000 | 0x1FF |  512 | interpreter |
 | 0x200 | 0xE9F | 3232 |             |
 | 0xEA0 | 0xEFF |   96 | stack       |
 | 0xF00 | 0xFFF |  256 | framebuffer |
@@ -40,7 +40,7 @@ HiRes mode: 128 x 64
   - VF Reset
   - memory index update (Fx55, Fx65)
   - shifting modification
-  - different jump opcoce (Bxnn)
+  - different jump opcode (Bxnn)
 - Draw 16x16
 *** Clock
 Opcodes clocked at 1KHz or better.
