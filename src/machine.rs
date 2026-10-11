@@ -25,6 +25,7 @@ pub struct Chip8Builder {
     step: fn(&mut Cpu, &mut Peripheral, &Random) -> Result<(), crate::Error>,
     clipping: bool,
     memory_size: usize,
+    double_buffer: bool,
 }
 
 impl Chip8Builder {
@@ -55,11 +56,18 @@ impl Chip8Builder {
             memory.extend_from_slice(rom);
             memory.resize(self.memory_size, 0);
 
+            let screen = if self.double_buffer { Some(Screen {
+                    is_hi_res: false,
+                    plane0: vec![],
+                    plane1: vec![],
+            }) } else { None };
+
             let component = Component {
                 cpu: Cpu::new(self.stack_in_memory, self.quirks),
                 peripheral: Peripheral::new(self.framebuffer_in_memory, self.clipping, memory),
                 rng: Random(),
                 step: self.step,
+                screen,
             };
             let ticker = Ticker::new(Duration::from_micros(1_000_000 / self.frequency));
 
@@ -91,6 +99,7 @@ impl Chip8Flavor {
                 step: Cpu::step,
                 clipping: true,
                 memory_size: MEMORY_SIZE,
+                double_buffer: false,
             },
             Chip8Flavor::SuperChip => Chip8Builder {
                 stack_in_memory: false,
@@ -101,6 +110,7 @@ impl Chip8Flavor {
                 step: Cpu::super_step,
                 clipping: true,
                 memory_size: MEMORY_SIZE,
+                double_buffer: false,
             },
             Chip8Flavor::Xo => Chip8Builder {
                 stack_in_memory: false,
@@ -111,9 +121,16 @@ impl Chip8Flavor {
                 step: Cpu::xo_step,
                 clipping: false,
                 memory_size: XO_MEMORY_SIZE,
+                double_buffer: true,
             },
         }
     }
+}
+
+struct Screen {
+    is_hi_res: bool,
+    plane0: Vec<u8>,
+    plane1: Vec<u8>,
 }
 
 struct Component {
@@ -121,6 +138,7 @@ struct Component {
     peripheral: Peripheral,
     rng: Random,
     step: fn(&mut Cpu, &mut Peripheral, &Random) -> Result<(), crate::Error>,
+    screen: Option<Screen>,
 }
 
 impl Tickable for Component {
@@ -136,6 +154,18 @@ impl Tickable for Component {
     fn tick_timer(&mut self) {
         self.cpu.delay_timer();
         self.peripheral.beeper.tick(Self::DT_TICK_TIMER);
+
+        if let Some(screen) = &mut self.screen {
+            let (plane0, plane1) = self.peripheral.framebuffer();
+
+            screen.is_hi_res = self.peripheral.is_hi_res();
+
+            screen.plane0.resize(plane0.len(), 0);
+            screen.plane1.resize(plane1.len(), 0);
+
+            screen.plane0.copy_from_slice(plane0);
+            screen.plane1.copy_from_slice(plane1);
+        }
     }
 }
 
@@ -186,6 +216,17 @@ impl Chip8 {
     pub fn framebuffer(&self) -> (&[u8], &[u8]) {
         self.component.peripheral.framebuffer()
     }
+
+    fn screen(&self) -> (bool, (&[u8], &[u8])) {
+        if let Some(screen) = &self.component.screen {
+            (screen.is_hi_res, (&screen.plane0, &screen.plane1))
+        } else {
+            (
+                self.component.peripheral.is_hi_res(),
+                self.component.peripheral.framebuffer(),
+            )
+        }
+    }
 }
 
 const ORANGE: [u8; 4] = [0xff, 0x95, 0x0, 0xff];
@@ -225,19 +266,20 @@ impl Renderable for Chip8 {
     const HEIGHT: u32 = HEIGHT as u32;
 
     fn render(&self, pixels: &mut Pixels<'_>) {
+        let (is_hi_res, planes) = self.screen();
         // We can resize every time because if it's equal it's a noop function
-        if !self.component.peripheral.is_hi_res() {
-            pixels.resize_buffer(Self::WIDTH, Self::HEIGHT).unwrap();
-        } else {
+        if is_hi_res {
             pixels
                 .resize_buffer(Self::WIDTH * 2, Self::HEIGHT * 2)
                 .unwrap();
+        } else {
+            pixels.resize_buffer(Self::WIDTH, Self::HEIGHT).unwrap();
         }
 
         let (chunks, _remainders) = pixels.frame_mut().as_chunks_mut::<4>();
 
         for (i, pixel) in chunks.iter_mut().enumerate() {
-            pixel.copy_from_slice(&pixel_color(self.framebuffer(), i));
+            pixel.copy_from_slice(&pixel_color(planes, i));
         }
     }
 }
