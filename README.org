@@ -65,6 +65,10 @@ Opcodes clocked at 1KHz or better.
 *** Resources
 - https://johnearnest.github.io/Octo/docs/XO-ChipSpecification.html
 
+** Roms
+The roms found in tests/roms are coming from: https://johnearnest.github.io/chip8Archive/
+Only nyancat rom need a greater frequency. Running at 600kHz (-f 600000) is okay.
+
 ** Resources
 - https://en.wikipedia.org/wiki/CHIP-8
 - https://beyondloom.com/blog/artofchip8.html
