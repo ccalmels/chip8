@@ -21,7 +21,7 @@ impl XoSource {
             sample_rate,
             pattern,
             index,
-            current_value: -0.1,
+            current_value: Self::value_for_index(&pattern, index),
         }
     }
 
@@ -30,6 +30,17 @@ impl XoSource {
         let shift = 7 - bit % 8;
 
         (pattern[index] >> shift) & 1 == 1
+    }
+
+    fn value_for_index(pattern: &[u8; 16], index: usize) -> f32 {
+        let bit = index / Self::MULTIPLIER;
+        let bit = bit % 128;
+
+        if Self::bit_is_set(pattern, bit) {
+            0.1
+        } else {
+            -0.1
+        }
     }
 }
 
@@ -56,14 +67,7 @@ impl Iterator for XoSource {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index.is_multiple_of(Self::MULTIPLIER) {
-            let bit = self.index / Self::MULTIPLIER;
-            let bit = bit % 128;
-
-            self.current_value = if Self::bit_is_set(&self.pattern, bit) {
-                0.1
-            } else {
-                -0.1
-            };
+            self.current_value = Self::value_for_index(&self.pattern, self.index)
         }
 
         self.index += 1;
