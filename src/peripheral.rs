@@ -296,7 +296,7 @@ impl SuperDisplay for Peripheral {
 impl XoDisplay for Peripheral {
     fn planes(&mut self, planes: u8) {
         if let Some(fb) = &mut self.framebuffer {
-            fb.selected_planes = planes;
+            fb.selected_planes = planes & Self::BOTH
         }
     }
 
