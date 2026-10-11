@@ -3,16 +3,6 @@ use chip_8::windowing::{KeyListener, Updatable};
 
 use std::time::Duration;
 
-fn assert_rom_matches_expected(rom: &[u8], expected: &[u8], steps: usize) {
-    let mut chip8 = Chip8Flavor::Classic.builder().load(rom).unwrap();
-
-    for _ in 0..steps {
-        chip8.update(Duration::from_millis(2)).unwrap();
-    }
-
-    assert_eq!(chip8.framebuffer().0, expected);
-}
-
 fn assert_rom_matches_expected_duration(rom: &[u8], expected: &[u8], duration: Duration) {
     let mut chip8 = Chip8Flavor::Classic.builder().load(rom).unwrap();
 
@@ -23,19 +13,19 @@ fn assert_rom_matches_expected_duration(rom: &[u8], expected: &[u8], duration: D
 
 #[test]
 fn chip8_logo() {
-    assert_rom_matches_expected(
+    assert_rom_matches_expected_duration(
         include_bytes!("fixtures/1-chip8-logo.ch8"),
         include_bytes!("fixtures/1-chip8-logo.expected"),
-        39, // this number comes from Timendus CHIP-8 splash screen description
+        Duration::from_millis(2 * 39), // this number comes from Timendus CHIP-8 splash screen description
     );
 }
 
 #[test]
 fn ibm_logo() {
-    assert_rom_matches_expected(
+    assert_rom_matches_expected_duration(
         include_bytes!("fixtures/2-ibm-logo.ch8"),
         include_bytes!("fixtures/2-ibm-logo.expected"),
-        20, // this number comes from Timendus IBM splash screen description
+        Duration::from_millis(2 * 20), // this number comes from Timendus IBM splash screen description
     );
 }
 
