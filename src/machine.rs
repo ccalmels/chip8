@@ -45,8 +45,8 @@ impl Chip8Builder {
     }
 
     pub fn load(self, rom: &[u8]) -> Result<Chip8, crate::Error> {
-        let start = Cpu::START_PC.value() as usize;
-        let fonts = Cpu::FONTS.value() as usize;
+        let start = Cpu::START_PC as usize;
+        let fonts = Cpu::FONTS as usize;
         let capacity = self.memory_size - start;
 
         if rom.len() <= capacity {

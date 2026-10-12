@@ -1,6 +1,7 @@
+use crate::Error;
 use crate::ca555::Ca555;
 use crate::cd4515::Cd4515;
-use crate::cpu::{Address, Beeper, Display, Keypad, Memory, SuperDisplay, XoAudio, XoDisplay};
+use crate::cpu::{Beeper, Display, Keypad, Memory, SuperDisplay, XoAudio, XoDisplay};
 
 const PIXEL_PER_U8: usize = 8;
 pub const WIDTH: u8 = 64;
@@ -136,12 +137,21 @@ impl Peripheral {
 }
 
 impl Memory for Peripheral {
-    fn read(&self, address: Address<16>) -> u8 {
-        self.memory[address.value() as usize]
+    fn read(&self, address: u16) -> Result<u8, Error> {
+        if let Some(v) = self.memory.get(address as usize) {
+            Ok(*v)
+        } else {
+            Err(Error::IllegalAccess(address))
+        }
     }
 
-    fn write(&mut self, address: Address<16>, value: u8) {
-        self.memory[address.value() as usize] = value;
+    fn write(&mut self, address: u16, value: u8) -> Result<(), Error> {
+        if let Some(v) = self.memory.get_mut(address as usize) {
+            *v = value;
+            Ok(())
+        } else {
+            Err(Error::IllegalAccess(address))
+        }
     }
 }
 
@@ -296,7 +306,7 @@ impl SuperDisplay for Peripheral {
 impl XoDisplay for Peripheral {
     fn planes(&mut self, planes: u8) {
         if let Some(fb) = &mut self.framebuffer {
-            fb.selected_planes = planes & Self::BOTH
+            fb.selected_planes = planes & Self::BOTH;
         }
     }
 

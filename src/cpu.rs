@@ -1,83 +1,6 @@
 use crate::Error;
 use std::ops::{Index, IndexMut};
 
-#[derive(Copy, Clone, PartialEq, Debug)]
-#[must_use]
-pub struct Address<const N: usize>(u16);
-
-impl<const N: usize> Address<N> {
-    const MASK: u16 = ((1u32 << N) - 1) as u16;
-
-    pub const fn new(value: u16) -> Self {
-        Address(value & Self::MASK)
-    }
-
-    pub const fn value(self) -> u16 {
-        self.0
-    }
-
-    pub fn wrapping_add(self, offset: u16) -> Self {
-        Address::new(self.0.wrapping_add(offset))
-    }
-
-    pub fn wrapping_sub(self, offset: u16) -> Self {
-        Address::new(self.0.wrapping_sub(offset))
-    }
-}
-
-impl From<Address<12>> for Address<16> {
-    fn from(val: Address<12>) -> Self {
-        Self::new(val.value())
-    }
-}
-
-#[cfg(test)]
-mod address_tests {
-    use super::*;
-
-    #[test]
-    fn new_masks_value_to_12_bits() {
-        assert_eq!(Address::<12>::new(0x200).value(), 0x200);
-        assert_eq!(Address::<12>::new(0x1000).value(), 0x000);
-        assert_eq!(Address::<12>::new(0xf000).value(), 0x000);
-        assert_eq!(Address::<12>::new(0xffff).value(), 0xfff);
-    }
-
-    #[test]
-    fn wrapping_add_wraps_at_max() {
-        assert_eq!(Address::<12>::new(0xfff).wrapping_add(1).value(), 0x000);
-    }
-
-    #[test]
-    fn wrapping_add_continue_after_wrap() {
-        assert_eq!(Address::<12>::new(0xfff).wrapping_add(2).value(), 0x001);
-    }
-
-    #[test]
-    fn wrapping_add_large_offsets() {
-        assert_eq!(Address::<12>::new(0x001).wrapping_add(0xfff).value(), 0x000);
-        assert_eq!(Address::<12>::new(0x002).wrapping_add(0xfff).value(), 0x001);
-        assert_eq!(Address::<12>::new(0xfff).wrapping_add(0xfff).value(), 0xffe);
-    }
-
-    #[test]
-    fn wrapping_sub_at_min() {
-        assert_eq!(Address::<12>::new(0x0).wrapping_sub(1).value(), 0xfff);
-    }
-
-    #[test]
-    fn wrapping_sub_after_wrap() {
-        assert_eq!(Address::<12>::new(0x0).wrapping_sub(2).value(), 0xffe);
-    }
-
-    #[test]
-    fn wrapping_sub_larg_offset() {
-        assert_eq!(Address::<12>::new(0xfff).wrapping_sub(0xfff).value(), 0x0);
-        assert_eq!(Address::<12>::new(0xffe).wrapping_sub(0xfff).value(), 0xfff);
-        assert_eq!(Address::<12>::new(0x0).wrapping_sub(0xfff).value(), 0x1);
-    }
-}
-
 struct Registers([u8; 16]);
 
 impl Index<u8> for Registers {
@@ -135,8 +58,8 @@ mod registers_tests {
 }
 
 pub trait Memory {
-    fn read(&self, address: Address<16>) -> u8;
-    fn write(&mut self, address: Address<16>, value: u8);
+    fn read(&self, address: u16) -> Result<u8, Error>;
+    fn write(&mut self, address: u16, value: u8) -> Result<(), Error>;
 }
 
 pub trait Display {
@@ -196,8 +119,8 @@ fn opcode_split(opcode: u16) -> ((u8, u8, u8, u8), u8, u16) {
 enum OpCode {
     Clear,
     Return,
-    Jump(Address<12>),
-    Call(Address<12>),
+    Jump(u16),
+    Call(u16),
     SkipEqual(u8, u8),
     SkipNotEqual(u8, u8),
     SkipRegistersEqual(u8, u8),
@@ -213,8 +136,8 @@ enum OpCode {
     InvSub(u8, u8),
     LShift(u8, u8),
     SkipRegistersNotEqual(u8, u8),
-    LoadIndex(Address<12>),
-    Flow(Address<12>),
+    LoadIndex(u16),
+    Flow(u16),
     Rand(u8, u8),
     Draw(u8, u8, u8),
     IsKey(u8),
@@ -234,8 +157,8 @@ fn opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<OpCod
     match nibbles {
         (0x0, 0x0, 0xe, 0x0) => Some(OpCode::Clear),
         (0x0, 0x0, 0xe, 0xe) => Some(OpCode::Return),
-        (0x1, _, _, _) => Some(OpCode::Jump(Address::<12>::new(nnn))),
-        (0x2, _, _, _) => Some(OpCode::Call(Address::<12>::new(nnn))),
+        (0x1, _, _, _) => Some(OpCode::Jump(nnn)),
+        (0x2, _, _, _) => Some(OpCode::Call(nnn)),
         (0x3, x, _, _) => Some(OpCode::SkipEqual(x, nn)),
         (0x4, x, _, _) => Some(OpCode::SkipNotEqual(x, nn)),
         (0x5, x, y, 0) => Some(OpCode::SkipRegistersEqual(x, y)),
@@ -251,8 +174,8 @@ fn opcode_match((nibbles, nn, nnn): ((u8, u8, u8, u8), u8, u16)) -> Option<OpCod
         (0x8, x, y, 7) => Some(OpCode::InvSub(x, y)),
         (0x8, x, y, 0xe) => Some(OpCode::LShift(x, y)),
         (0x9, x, y, 0) => Some(OpCode::SkipRegistersNotEqual(x, y)),
-        (0xa, _, _, _) => Some(OpCode::LoadIndex(Address::<12>::new(nnn))),
-        (0xb, _, _, _) => Some(OpCode::Flow(Address::<12>::new(nnn))),
+        (0xa, _, _, _) => Some(OpCode::LoadIndex(nnn)),
+        (0xb, _, _, _) => Some(OpCode::Flow(nnn)),
         (0xc, x, _, _) => Some(OpCode::Rand(x, nn)),
         (0xd, x, y, n) => Some(OpCode::Draw(x, y, n)),
         (0xe, x, 9, 0xe) => Some(OpCode::IsKey(x)),
@@ -291,14 +214,14 @@ mod decode_tests {
 
     #[test]
     fn decode_jump() {
-        assert_eq!(decode(0x1123), Ok(OpCode::Jump(Address::<12>::new(0x123))));
-        assert_eq!(decode(0x1fed), Ok(OpCode::Jump(Address::<12>::new(0xfed))));
+        assert_eq!(decode(0x1123), Ok(OpCode::Jump(0x123)));
+        assert_eq!(decode(0x1fed), Ok(OpCode::Jump(0xfed)));
     }
 
     #[test]
     fn decode_call() {
-        assert_eq!(decode(0x2123), Ok(OpCode::Call(Address::<12>::new(0x123))));
-        assert_eq!(decode(0x2fed), Ok(OpCode::Call(Address::<12>::new(0xfed))));
+        assert_eq!(decode(0x2123), Ok(OpCode::Call(0x123)));
+        assert_eq!(decode(0x2fed), Ok(OpCode::Call(0xfed)));
     }
     #[test]
     fn decode_skip_equal() {
@@ -386,20 +309,14 @@ mod decode_tests {
 
     #[test]
     fn decode_load_index() {
-        assert_eq!(
-            decode(0xa123),
-            Ok(OpCode::LoadIndex(Address::<12>::new(0x123)))
-        );
-        assert_eq!(
-            decode(0xafed),
-            Ok(OpCode::LoadIndex(Address::<12>::new(0xfed)))
-        );
+        assert_eq!(decode(0xa123), Ok(OpCode::LoadIndex(0x123)));
+        assert_eq!(decode(0xafed), Ok(OpCode::LoadIndex(0xfed)));
     }
 
     #[test]
     fn decode_flow() {
-        assert_eq!(decode(0xb123), Ok(OpCode::Flow(Address::<12>::new(0x123))));
-        assert_eq!(decode(0xbfed), Ok(OpCode::Flow(Address::<12>::new(0xfed))));
+        assert_eq!(decode(0xb123), Ok(OpCode::Flow(0x123)));
+        assert_eq!(decode(0xbfed), Ok(OpCode::Flow(0xfed)));
     }
 
     #[test]
@@ -691,11 +608,11 @@ mod xo_decode_tests {
     }
 }
 
-fn fetch<M: Memory>(memory: &M, pc: Address<12>) -> u16 {
-    let high = memory.read(pc.into());
-    let low = memory.read(pc.wrapping_add(1).into());
+fn fetch<M: Memory>(memory: &M, pc: u16) -> Result<u16, Error> {
+    let high = memory.read(pc)?;
+    let low = memory.read(pc.wrapping_add(1))?;
 
-    (high as u16) << 8 | low as u16
+    Ok((high as u16) << 8 | low as u16)
 }
 
 #[cfg(test)]
@@ -705,12 +622,13 @@ mod fetch_tests {
     pub struct FakeMemory(pub Vec<u8>);
 
     impl Memory for FakeMemory {
-        fn read(&self, address: Address<16>) -> u8 {
-            self.0[address.value() as usize]
+        fn read(&self, address: u16) -> Result<u8, Error> {
+            Ok(self.0[address as usize])
         }
 
-        fn write(&mut self, address: Address<16>, value: u8) {
-            self.0[address.value() as usize] = value;
+        fn write(&mut self, address: u16, value: u8) -> Result<(), Error> {
+            self.0[address as usize] = value;
+            Ok(())
         }
     }
 
@@ -718,45 +636,50 @@ mod fetch_tests {
     fn fetch_opcode() {
         let memory = FakeMemory(vec![0xde, 0xad, 0xbe, 0xef]);
 
-        assert_eq!(fetch(&memory, Address::<12>::new(0)), 0xdead);
-        assert_eq!(fetch(&memory, Address::<12>::new(2)), 0xbeef);
+        assert_eq!(fetch(&memory, 0), Ok(0xdead));
+        assert_eq!(fetch(&memory, 2), Ok(0xbeef));
     }
 }
 
 #[derive(Debug, PartialEq)]
 enum Stack {
-    Memory(Address<12>),
-    Internal(Vec<Address<12>>),
+    Memory(u16),
+    Internal(Vec<u16>),
 }
 
 impl Stack {
-    fn push<M: Memory>(&mut self, memory: &mut M, address: Address<12>) {
+    fn push<M: Memory>(&mut self, memory: &mut M, address: u16) -> Result<(), Error> {
         match self {
             Stack::Memory(sp) => {
-                let (high, low) = ((address.value() >> 8) as u8, (address.value() & 0xff) as u8);
+                let (high, low) = ((address >> 8) as u8, (address & 0xff) as u8);
 
-                memory.write((*sp).into(), high);
+                memory.write(*sp, high)?;
                 *sp = sp.wrapping_sub(1);
 
-                memory.write((*sp).into(), low);
+                memory.write(*sp, low)?;
                 *sp = sp.wrapping_sub(1);
+
+                Ok(())
             }
-            Stack::Internal(stack) => stack.push(address),
+            Stack::Internal(stack) => {
+                stack.push(address);
+                Ok(())
+            }
         }
     }
 
-    fn pop<M: Memory>(&mut self, memory: &M) -> Address<12> {
+    fn pop<M: Memory>(&mut self, memory: &M) -> Result<u16, Error> {
         match self {
             Stack::Memory(sp) => {
                 *sp = sp.wrapping_add(1);
-                let low = memory.read((*sp).into());
+                let low = memory.read(*sp)?;
 
                 *sp = sp.wrapping_add(1);
-                let high = memory.read((*sp).into());
+                let high = memory.read(*sp)?;
 
-                Address::<12>::new((high as u16) << 8 | low as u16)
+                Ok((high as u16) << 8 | low as u16)
             }
-            Stack::Internal(stack) => stack.pop().unwrap_or(Address::<12>::new(0)),
+            Stack::Internal(stack) => stack.pop().ok_or(Error::StackUnderflow),
         }
     }
 }
@@ -768,42 +691,43 @@ mod stack_tests {
     struct MockMemory([u8; 8]);
 
     impl Memory for MockMemory {
-        fn read(&self, address: Address<16>) -> u8 {
-            self.0[address.value() as usize]
+        fn read(&self, address: u16) -> Result<u8, Error> {
+            Ok(self.0[address as usize])
         }
 
-        fn write(&mut self, address: Address<16>, value: u8) {
-            self.0[address.value() as usize] = value;
+        fn write(&mut self, address: u16, value: u8) -> Result<(), Error> {
+            self.0[address as usize] = value;
+            Ok(())
         }
     }
 
     #[test]
     fn push_pop_stack_memory() {
-        let mut stack = Stack::Memory(Address::<12>::new(7));
+        let mut stack = Stack::Memory(7);
         let mut memory = MockMemory([0; 8]);
 
         let expected = [0, 0, 0, 0, 0x23, 0x1, 0xbc, 0xa];
 
-        stack.push(&mut memory, Address::<12>::new(0xabc));
-        assert_eq!(stack, Stack::Memory(Address::<12>::new(5)));
-        stack.push(&mut memory, Address::<12>::new(0x123));
-        assert_eq!(stack, Stack::Memory(Address::<12>::new(3)));
+        stack.push(&mut memory, 0xabc).unwrap();
+        assert_eq!(stack, Stack::Memory(5));
+        stack.push(&mut memory, 0x123).unwrap();
+        assert_eq!(stack, Stack::Memory(3));
 
         assert_eq!(memory.0, expected);
 
         let expected = [0, 0, 0, 0, 0x54, 0x6, 0xbc, 0xa];
 
-        assert_eq!(stack.pop(&memory), Address::<12>::new(0x123));
-        assert_eq!(stack, Stack::Memory(Address::<12>::new(5)));
+        assert_eq!(stack.pop(&memory), Ok(0x123));
+        assert_eq!(stack, Stack::Memory(5));
 
-        stack.push(&mut memory, Address::<12>::new(0x654));
+        stack.push(&mut memory, 0x654).unwrap();
         assert_eq!(memory.0, expected);
-        assert_eq!(stack, Stack::Memory(Address::<12>::new(3)));
+        assert_eq!(stack, Stack::Memory(3));
 
-        assert_eq!(stack.pop(&memory), Address::<12>::new(0x654));
-        assert_eq!(stack, Stack::Memory(Address::<12>::new(5)));
-        assert_eq!(stack.pop(&memory), Address::<12>::new(0xabc));
-        assert_eq!(stack, Stack::Memory(Address::<12>::new(7)));
+        assert_eq!(stack.pop(&memory), Ok(0x654));
+        assert_eq!(stack, Stack::Memory(5));
+        assert_eq!(stack.pop(&memory), Ok(0xabc));
+        assert_eq!(stack, Stack::Memory(7));
     }
 
     #[test]
@@ -811,29 +735,23 @@ mod stack_tests {
         let mut stack = Stack::Internal(vec![]);
         let mut memory = MockMemory([0; 8]);
 
-        stack.push(&mut memory, Address::<12>::new(0xabc));
-        assert_eq!(stack, Stack::Internal(vec![Address::<12>::new(0xabc)]));
+        stack.push(&mut memory, 0xabc).unwrap();
+        assert_eq!(stack, Stack::Internal(vec![0xabc]));
 
-        stack.push(&mut memory, Address::<12>::new(0x123));
-        assert_eq!(
-            stack,
-            Stack::Internal(vec![Address::<12>::new(0xabc), Address::<12>::new(0x123)])
-        );
+        stack.push(&mut memory, 0x123).unwrap();
+        assert_eq!(stack, Stack::Internal(vec![0xabc, 0x123]));
 
-        assert_eq!(stack.pop(&memory), Address::<12>::new(0x123));
-        assert_eq!(stack, Stack::Internal(vec![Address::<12>::new(0xabc)]));
+        assert_eq!(stack.pop(&memory), Ok(0x123));
+        assert_eq!(stack, Stack::Internal(vec![0xabc]));
 
-        stack.push(&mut memory, Address::<12>::new(0x654));
+        stack.push(&mut memory, 0x654).unwrap();
 
-        assert_eq!(
-            stack,
-            Stack::Internal(vec![Address::<12>::new(0xabc), Address::<12>::new(0x654)])
-        );
+        assert_eq!(stack, Stack::Internal(vec![0xabc, 0x654]));
 
-        assert_eq!(stack.pop(&memory), Address::<12>::new(0x654));
-        assert_eq!(stack, Stack::Internal(vec![Address::<12>::new(0xabc)]));
+        assert_eq!(stack.pop(&memory), Ok(0x654));
+        assert_eq!(stack, Stack::Internal(vec![0xabc]));
 
-        assert_eq!(stack.pop(&memory), Address::<12>::new(0xabc));
+        assert_eq!(stack.pop(&memory), Ok(0xabc));
         assert_eq!(stack, Stack::Internal(vec![]));
     }
 }
@@ -875,9 +793,9 @@ impl Quirks {
 }
 
 pub struct Cpu {
-    pc: Address<12>,
+    pc: u16,
     stack: Stack,
-    i: Address<16>,
+    i: u16,
     vs: Registers,
     dt: u8, // delay timer
     quirks: Quirks,
@@ -885,11 +803,11 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub const START_PC: Address<12> = Address::<12>::new(0x200);
-    pub const FONTS: Address<16> = Address::<16>::new(0x000);
+    pub const START_PC: u16 = 0x200;
+    pub const FONTS: u16 = 0x000;
     const FONTS_SIZE: u16 = 0x50;
-    const HI_FONTS: Address<16> = Address::<16>::new(Self::FONTS.value() + Self::FONTS_SIZE);
-    const SP: Address<12> = Address::<12>::new(0xeff);
+    const HI_FONTS: u16 = Self::FONTS + Self::FONTS_SIZE;
+    const SP: u16 = 0xeff;
 
     pub fn new(stack_in_memory: bool, quirks: Quirks) -> Self {
         Cpu {
@@ -899,7 +817,7 @@ impl Cpu {
             } else {
                 Stack::Internal(vec![])
             },
-            i: Address::<16>::new(0),
+            i: 0,
             vs: Registers([0; 16]),
             dt: 0,
             quirks,
@@ -913,14 +831,20 @@ impl Cpu {
         }
     }
 
-    fn draw<P: Display + Memory>(peripheral: &mut P, i: Address<16>, x: u8, y: u8, n: u8) -> u8 {
+    fn draw<P: Display + Memory>(
+        peripheral: &mut P,
+        i: u16,
+        x: u8,
+        y: u8,
+        n: u8,
+    ) -> Result<u8, Error> {
         let mut sprite = [0u8; 15];
 
         for (row, byte) in sprite.iter_mut().enumerate().take(n as usize) {
-            *byte = peripheral.read(i.wrapping_add(row as u16));
+            *byte = peripheral.read(i.wrapping_add(row as u16))?;
         }
 
-        peripheral.draw(x, y, &sprite[..n as usize]) as u8
+        Ok(peripheral.draw(x, y, &sprite[..n as usize]) as u8)
     }
 
     fn execute<P: Memory + Display + Keypad + Beeper, R: Rng>(
@@ -928,16 +852,16 @@ impl Cpu {
         peripheral: &mut P,
         rng: &R,
         opcode: OpCode,
-    ) -> bool {
+    ) -> Result<bool, Error> {
         let mut skip = false;
 
         match opcode {
             OpCode::Clear => peripheral.clear(),
-            OpCode::Return => self.pc = self.stack.pop(peripheral),
+            OpCode::Return => self.pc = self.stack.pop(peripheral)?,
             OpCode::Jump(address) => self.pc = address,
             OpCode::Call(address) => {
-                self.stack.push(peripheral, self.pc);
-                self.pc = address
+                self.stack.push(peripheral, self.pc)?;
+                self.pc = address;
             }
             OpCode::SkipEqual(v, value) => skip = self.vs[v] == value,
             OpCode::SkipNotEqual(v, value) => skip = self.vs[v] != value,
@@ -948,19 +872,19 @@ impl Cpu {
             OpCode::Or(x, y) => {
                 self.vs[x] |= self.vs[y];
                 if self.quirks.vf_reset {
-                    self.vs[0xf] = 0
+                    self.vs[0xf] = 0;
                 }
             }
             OpCode::And(x, y) => {
                 self.vs[x] &= self.vs[y];
                 if self.quirks.vf_reset {
-                    self.vs[0xf] = 0
+                    self.vs[0xf] = 0;
                 }
             }
             OpCode::Xor(x, y) => {
                 self.vs[x] ^= self.vs[y];
                 if self.quirks.vf_reset {
-                    self.vs[0xf] = 0
+                    self.vs[0xf] = 0;
                 }
             }
             OpCode::Add(x, y) => {
@@ -1001,19 +925,19 @@ impl Cpu {
                 self.vs[0xf] = msb;
             }
             OpCode::SkipRegistersNotEqual(x, y) => skip = self.vs[x] != self.vs[y],
-            OpCode::LoadIndex(addr) => self.i = addr.into(),
+            OpCode::LoadIndex(addr) => self.i = addr,
             OpCode::Flow(addr) => {
                 if self.quirks.jumping {
-                    let x = (addr.value() >> 8) as u8;
+                    let x = (addr >> 8) as u8;
 
-                    self.pc = addr.wrapping_add(self.vs[x] as u16)
+                    self.pc = addr.wrapping_add(self.vs[x] as u16);
                 } else {
-                    self.pc = addr.wrapping_add(self.vs[0] as u16)
+                    self.pc = addr.wrapping_add(self.vs[0] as u16);
                 }
             }
             OpCode::Rand(x, nn) => self.vs[x] = rng.next() & nn,
             OpCode::Draw(x, y, n) => {
-                self.vs[0xf] = Self::draw(peripheral, self.i, self.vs[x], self.vs[y], n)
+                self.vs[0xf] = Self::draw(peripheral, self.i, self.vs[x], self.vs[y], n)?;
             }
             OpCode::IsKey(x) => skip = peripheral.key_pressed(self.vs[x] & 0xf),
             OpCode::IsNotKey(x) => skip = !peripheral.key_pressed(self.vs[x] & 0xf),
@@ -1035,17 +959,17 @@ impl Cpu {
                 let c = self.vs[x] % 10;
                 let mut destination = self.i;
 
-                peripheral.write(destination, a);
+                peripheral.write(destination, a)?;
                 destination = destination.wrapping_add(1);
-                peripheral.write(destination, b);
+                peripheral.write(destination, b)?;
                 destination = destination.wrapping_add(1);
-                peripheral.write(destination, c);
+                peripheral.write(destination, c)?;
             }
             OpCode::Write(x) => {
                 let mut dest = self.i;
 
                 for i in 0..=x {
-                    peripheral.write(dest, self.vs[i]);
+                    peripheral.write(dest, self.vs[i])?;
                     dest = dest.wrapping_add(1);
                 }
 
@@ -1057,7 +981,7 @@ impl Cpu {
                 let mut src = self.i;
 
                 for i in 0..=x {
-                    self.vs[i] = peripheral.read(src);
+                    self.vs[i] = peripheral.read(src)?;
                     src = src.wrapping_add(1);
                 }
 
@@ -1067,23 +991,23 @@ impl Cpu {
             }
         }
 
-        skip
+        Ok(skip)
     }
 
-    fn draw16<P: Display + Memory>(peripheral: &mut P, i: Address<16>, x: u8, y: u8) -> u8 {
+    fn draw16<P: Display + Memory>(peripheral: &mut P, i: u16, x: u8, y: u8) -> Result<u8, Error> {
         let mut sprite = [0u8; 16];
 
         for (row, byte) in sprite.iter_mut().enumerate() {
-            *byte = peripheral.read(i.wrapping_add(2 * row as u16));
+            *byte = peripheral.read(i.wrapping_add(2 * row as u16))?;
         }
 
         let flag = peripheral.draw(x, y, &sprite) as u8;
 
         for (row, byte) in sprite.iter_mut().enumerate() {
-            *byte = peripheral.read(i.wrapping_add(1 + 2 * row as u16));
+            *byte = peripheral.read(i.wrapping_add(1 + 2 * row as u16))?;
         }
 
-        flag | peripheral.draw(x.wrapping_add(8), y, &sprite) as u8
+        Ok(flag | peripheral.draw(x.wrapping_add(8), y, &sprite) as u8)
     }
 
     fn super_execute<P: Memory + Display + Keypad + Beeper + SuperDisplay, R: Rng>(
@@ -1091,7 +1015,7 @@ impl Cpu {
         peripheral: &mut P,
         rng: &R,
         opcode: SuperOpCode,
-    ) -> bool {
+    ) -> Result<bool, Error> {
         match opcode {
             SuperOpCode::ScrollDown(n) => peripheral.scroll_down(n),
             SuperOpCode::ScrollRight => peripheral.scroll_right(),
@@ -1099,25 +1023,25 @@ impl Cpu {
             SuperOpCode::LowRes => peripheral.switch_resolution(false),
             SuperOpCode::HiRes => peripheral.switch_resolution(true),
             SuperOpCode::Draw16(x, y) => {
-                self.vs[0xf] = Self::draw16(peripheral, self.i, self.vs[x], self.vs[y])
+                self.vs[0xf] = Self::draw16(peripheral, self.i, self.vs[x], self.vs[y])?;
             }
             SuperOpCode::HiSprite(x) => {
-                self.i = Self::HI_FONTS.wrapping_add((self.vs[x] as u16 & 0xf) * 10)
+                self.i = Self::HI_FONTS.wrapping_add((self.vs[x] as u16 & 0xf) * 10);
             }
             SuperOpCode::Store(x) => {
                 for i in 0..=x {
-                    self.storage[i as usize] = self.vs[i]
+                    self.storage[i as usize] = self.vs[i];
                 }
             }
             SuperOpCode::Load(x) => {
                 for i in 0..=x {
-                    self.vs[i] = self.storage[i as usize]
+                    self.vs[i] = self.storage[i as usize];
                 }
             }
             SuperOpCode::Chip8(opcode) => return self.execute(peripheral, rng, opcode),
         }
 
-        false
+        Ok(false)
     }
 
     fn xo_execute<
@@ -1128,7 +1052,7 @@ impl Cpu {
         peripheral: &mut P,
         rng: &R,
         opcode: XoOpCode,
-    ) -> bool {
+    ) -> Result<bool, Error> {
         match opcode {
             XoOpCode::ScrollUp(n) => peripheral.scroll_up(n),
             XoOpCode::Store(x, y) => {
@@ -1140,7 +1064,7 @@ impl Cpu {
                 };
 
                 for i in range {
-                    peripheral.write(dest, self.vs[i]);
+                    peripheral.write(dest, self.vs[i])?;
                     dest = dest.wrapping_add(1);
                 }
             }
@@ -1153,26 +1077,31 @@ impl Cpu {
                 };
 
                 for i in range {
-                    self.vs[i] = peripheral.read(src);
+                    self.vs[i] = peripheral.read(src)?;
                     src = src.wrapping_add(1);
                 }
             }
             XoOpCode::Draw16(x, y) => {
                 if peripheral.both_planes() {
                     peripheral.planes(P::PLANE0);
-                    let flag = Self::draw16(peripheral, self.i, self.vs[x], self.vs[y]);
+                    let flag = Self::draw16(peripheral, self.i, self.vs[x], self.vs[y])?;
                     peripheral.planes(P::PLANE1);
                     self.vs[0xf] = flag
-                        | Self::draw16(peripheral, self.i.wrapping_add(32), self.vs[x], self.vs[y]);
+                        | Self::draw16(
+                            peripheral,
+                            self.i.wrapping_add(32),
+                            self.vs[x],
+                            self.vs[y],
+                        )?;
                     peripheral.planes(P::BOTH);
                 } else {
-                    self.vs[0xf] = Self::draw16(peripheral, self.i, self.vs[x], self.vs[y]);
+                    self.vs[0xf] = Self::draw16(peripheral, self.i, self.vs[x], self.vs[y])?;
                 }
             }
             XoOpCode::Draw(x, y, n) => {
                 if peripheral.both_planes() {
                     peripheral.planes(P::PLANE0);
-                    let flag = Self::draw(peripheral, self.i, self.vs[x], self.vs[y], n);
+                    let flag = Self::draw(peripheral, self.i, self.vs[x], self.vs[y], n)?;
                     peripheral.planes(P::PLANE1);
                     self.vs[0xf] = flag
                         | Self::draw(
@@ -1181,16 +1110,16 @@ impl Cpu {
                             self.vs[x],
                             self.vs[y],
                             n,
-                        );
+                        )?;
                     peripheral.planes(P::BOTH);
                 } else {
-                    self.vs[0xf] = Self::draw(peripheral, self.i, self.vs[x], self.vs[y], n);
+                    self.vs[0xf] = Self::draw(peripheral, self.i, self.vs[x], self.vs[y], n)?;
                 }
             }
             XoOpCode::Index16 => {
-                let nnnn = fetch(peripheral, self.pc);
+                let nnnn = fetch(peripheral, self.pc)?;
 
-                self.i = Address::<16>::new(nnnn);
+                self.i = nnnn;
                 self.pc = self.pc.wrapping_add(2);
             }
             XoOpCode::Planes(n) => peripheral.planes(n),
@@ -1198,7 +1127,7 @@ impl Cpu {
                 let mut pattern = [0; 16];
 
                 for (i, value) in pattern.iter_mut().enumerate() {
-                    *value = peripheral.read(self.i.wrapping_add(i as u16));
+                    *value = peripheral.read(self.i.wrapping_add(i as u16))?;
                 }
 
                 peripheral.pattern(pattern);
@@ -1207,7 +1136,7 @@ impl Cpu {
             XoOpCode::SuperChip(opcode) => return self.super_execute(peripheral, rng, opcode),
         }
 
-        false
+        Ok(false)
     }
 
     pub fn step<P: Memory + Display + Keypad + Beeper, R: Rng>(
@@ -1215,12 +1144,12 @@ impl Cpu {
         peripheral: &mut P,
         rng: &R,
     ) -> Result<(), crate::Error> {
-        let opcode = fetch(peripheral, self.pc);
+        let opcode = fetch(peripheral, self.pc)?;
         let opcode = decode(opcode)?;
 
         self.pc = self.pc.wrapping_add(2);
 
-        if self.execute(peripheral, rng, opcode) {
+        if self.execute(peripheral, rng, opcode)? {
             // Skip next opcode
             self.pc = self.pc.wrapping_add(2);
         }
@@ -1233,12 +1162,12 @@ impl Cpu {
         peripheral: &mut P,
         rng: &R,
     ) -> Result<(), crate::Error> {
-        let opcode = fetch(peripheral, self.pc);
+        let opcode = fetch(peripheral, self.pc)?;
         let opcode = super_decode(opcode)?;
 
         self.pc = self.pc.wrapping_add(2);
 
-        if self.super_execute(peripheral, rng, opcode) {
+        if self.super_execute(peripheral, rng, opcode)? {
             // Skip next opcode
             self.pc = self.pc.wrapping_add(2);
         }
@@ -1254,14 +1183,14 @@ impl Cpu {
         peripheral: &mut P,
         rng: &R,
     ) -> Result<(), crate::Error> {
-        let opcode = fetch(peripheral, self.pc);
+        let opcode = fetch(peripheral, self.pc)?;
         let opcode = xo_decode(opcode)?;
 
         self.pc = self.pc.wrapping_add(2);
 
-        if self.xo_execute(peripheral, rng, opcode) {
+        if self.xo_execute(peripheral, rng, opcode)? {
             // Skip next opcode
-            let next_opcode = fetch(peripheral, self.pc);
+            let next_opcode = fetch(peripheral, self.pc)?;
             if next_opcode == 0xf000 {
                 self.pc = self.pc.wrapping_add(4);
             } else {
@@ -1306,12 +1235,13 @@ mod execute_tests {
     }
 
     impl Memory for MockPeripheral {
-        fn read(&self, address: Address<16>) -> u8 {
-            self.memory[address.value() as usize]
+        fn read(&self, address: u16) -> Result<u8, Error> {
+            Ok(self.memory[address as usize])
         }
 
-        fn write(&mut self, address: Address<16>, value: u8) {
-            self.memory[address.value() as usize] = value;
+        fn write(&mut self, address: u16, value: u8) -> Result<(), Error> {
+            self.memory[address as usize] = value;
+            Ok(())
         }
     }
 
@@ -1354,17 +1284,17 @@ mod execute_tests {
         let mut p = MockPeripheral::new();
         let rng = FixedRng(0xff);
 
-        cpu.execute(&mut p, &rng, OpCode::Rand(2, 0x0));
+        cpu.execute(&mut p, &rng, OpCode::Rand(2, 0x0)).unwrap();
 
         assert_eq!(cpu.vs[2], 0);
 
-        cpu.execute(&mut p, &rng, OpCode::Rand(3, 0xa2));
+        cpu.execute(&mut p, &rng, OpCode::Rand(3, 0xa2)).unwrap();
 
         assert_eq!(cpu.vs[3], 0xa2);
 
         let rng = FixedRng(0xf0);
 
-        cpu.execute(&mut p, &rng, OpCode::Rand(4, 0xa2));
+        cpu.execute(&mut p, &rng, OpCode::Rand(4, 0xa2)).unwrap();
 
         assert_eq!(cpu.vs[4], 0xa0);
     }

@@ -9,6 +9,8 @@ pub mod windowing;
 #[derive(PartialEq)]
 pub enum Error {
     UnknownOpCode(u16),
+    IllegalAccess(u16),
+    StackUnderflow,
     RomTooLarge { size: usize, capacity: usize },
 }
 
@@ -16,6 +18,8 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Error::UnknownOpCode(opcode) => write!(f, "Unknown opcode: {opcode:#06x}"),
+            Error::IllegalAccess(address) => write!(f, "Illegal memory access at {address:#06x}"),
+            Error::StackUnderflow => write!(f, "Stack underflow"),
             Error::RomTooLarge { size, capacity } => {
                 write!(f, "Rom too large: {size} and {capacity} available")
             }
