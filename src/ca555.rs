@@ -67,7 +67,7 @@ impl Iterator for XoSource {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index.is_multiple_of(Self::MULTIPLIER) {
-            self.current_value = Self::value_for_index(&self.pattern, self.index)
+            self.current_value = Self::value_for_index(&self.pattern, self.index);
         }
 
         self.index += 1;
@@ -133,7 +133,8 @@ impl Ca555 {
 
             let sound = XoSource::new(self.start_index, self.pitch, samples).take_duration(delta);
 
-            self.start_index += sound.current_span_len().unwrap();
+            self.start_index = (self.start_index + sound.current_span_len().unwrap())
+                % (XoSource::MULTIPLIER * 128);
 
             sink.player.append(sound);
         }
