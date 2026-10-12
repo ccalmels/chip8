@@ -17,6 +17,8 @@ pub struct Ticker {
 
 impl Ticker {
     pub fn new(dt_tick: Duration) -> Self {
+        assert!(!dt_tick.is_zero());
+
         Ticker {
             accumulator: Duration::ZERO,
             timer_accumulator: Duration::ZERO,

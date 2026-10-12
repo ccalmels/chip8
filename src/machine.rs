@@ -78,7 +78,7 @@ impl Chip8Builder {
                 step: self.step,
                 screen,
             };
-            let ticker = Ticker::new(Duration::from_micros(1_000_000 / self.frequency));
+            let ticker = Ticker::new(Duration::from_nanos(1_000_000_000 / self.frequency));
 
             Ok(Chip8 { component, ticker })
         } else {
@@ -154,7 +154,7 @@ impl Tickable for Component {
     type Error = crate::Error;
 
     // Timers at 60 Hz
-    const DT_TICK_TIMER: Duration = Duration::from_micros(1_000_000 / 60);
+    const DT_TICK_TIMER: Duration = Duration::from_nanos(1_000_000_000 / 60);
 
     fn tick(&mut self) -> Result<(), Self::Error> {
         (self.step)(&mut self.cpu, &mut self.peripheral, &self.rng)

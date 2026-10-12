@@ -67,7 +67,7 @@ Opcodes clocked at 1KHz or better.
 
 ** Roms
 The roms found in tests/roms are coming from: https://johnearnest.github.io/chip8Archive/
-Only nyancat rom need a greater frequency. Running at 600kHz (-f 600000) is okay.
+Only nyancat rom need a greater frequency. Running at 900kHz (-f 900000) is okay.
 
 ** Resources
 - https://en.wikipedia.org/wiki/CHIP-8
