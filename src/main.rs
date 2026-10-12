@@ -13,7 +13,7 @@ struct Cli {
     rom_path: String,
 
     /// Frequency
-    #[arg(short, long)]
+    #[arg(short, long, value_parser = clap::value_parser!(u64).range(60..=1_000_000_000))]
     frequency: Option<u64>,
 
     /// Clipping
