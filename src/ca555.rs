@@ -11,7 +11,7 @@ struct XoSource {
 }
 
 impl XoSource {
-    const MULTIPLIER: usize = 128;
+    const MULTIPLIER: usize = 32;
 
     fn new(index: usize, pitch: u8, pattern: [u8; 16]) -> Self {
         let frequency = 4000.0 * 2f32.powf((pitch as f32 - 64.0) / 48.0);
