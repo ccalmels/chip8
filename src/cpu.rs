@@ -753,6 +753,8 @@ mod stack_tests {
 
         assert_eq!(stack.pop(&memory), Ok(0xabc));
         assert_eq!(stack, Stack::Internal(vec![]));
+
+        assert_eq!(stack.pop(&memory), Err(Error::StackUnderflow));
     }
 }
 
