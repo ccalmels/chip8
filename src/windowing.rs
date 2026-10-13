@@ -83,7 +83,7 @@ impl<E: Renderable + Updatable + KeyListener> ApplicationHandler for App<E> {
             WindowEvent::RedrawRequested => {
                 if let (Some(pixels), Some(window)) = (&mut self.pixels, &self.window) {
                     let now = Instant::now();
-                    let delta = now - self.last_timestamp;
+                    let delta = (now - self.last_timestamp).min(Duration::from_secs(1));
 
                     self.last_timestamp = now;
 
