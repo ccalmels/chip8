@@ -57,9 +57,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     app.run();
 
-    if let Some(error) = app.engine_error {
-        Err(Box::new(error))
-    } else {
-        Ok(())
-    }
+    app.engine_error.map_or(Ok(()), |e| Err(e.into()))
 }
