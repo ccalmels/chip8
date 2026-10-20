@@ -55,7 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut app = App::new(builder.load(&rom)?);
 
-    app.run();
+    app.run()?;
 
     app.engine_error.map_or(Ok(()), |e| Err(e.into()))
 }

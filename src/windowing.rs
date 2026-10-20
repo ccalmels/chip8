@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
+use winit::error::EventLoopError;
 use winit::event::{KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
@@ -42,12 +43,14 @@ impl<E: Renderable + Updatable + KeyListener> App<E> {
         }
     }
 
-    pub fn run(&mut self) {
-        let event_loop = EventLoop::new().unwrap();
+    pub fn run(&mut self) -> Result<(), EventLoopError> {
+        let event_loop = EventLoop::new()?;
 
         event_loop.set_control_flow(ControlFlow::Wait);
 
-        let _ = event_loop.run_app(self);
+        event_loop.run_app(self)?;
+
+        Ok(())
     }
 }
 
