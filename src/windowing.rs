@@ -56,26 +56,24 @@ impl<E: Renderable + Updatable + KeyListener> App<E> {
 
 impl<E: Renderable + Updatable + KeyListener> ApplicationHandler for App<E> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_none() {
-            let window = event_loop
-                .create_window(
-                    Window::default_attributes()
-                        .with_title("Chip-8")
-                        .with_inner_size(LogicalSize::new(E::WIDTH * 12, E::HEIGHT * 12)),
-                )
-                .unwrap();
+        let window = event_loop
+            .create_window(
+                Window::default_attributes()
+                    .with_title("Chip-8")
+                    .with_inner_size(LogicalSize::new(E::WIDTH * 12, E::HEIGHT * 12)),
+            )
+            .unwrap();
 
-            window.set_cursor_visible(false);
-            let window_size = window.inner_size();
+        window.set_cursor_visible(false);
+        let window_size = window.inner_size();
 
-            let window = Arc::new(window);
-            let surface_texture =
-                SurfaceTexture::new(window_size.width, window_size.height, Arc::clone(&window));
-            let pixels = Pixels::new(E::WIDTH, E::HEIGHT, surface_texture).unwrap();
+        let window = Arc::new(window);
+        let surface_texture =
+            SurfaceTexture::new(window_size.width, window_size.height, Arc::clone(&window));
+        let pixels = Pixels::new(E::WIDTH, E::HEIGHT, surface_texture).unwrap();
 
-            self.window = Some(window);
-            self.pixels = Some(pixels);
-        }
+        self.window = Some(window);
+        self.pixels = Some(pixels);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
