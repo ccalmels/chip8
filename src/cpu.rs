@@ -801,7 +801,7 @@ pub struct Cpu {
     vs: Registers,
     dt: u8, // delay timer
     quirks: Quirks,
-    storage: [u8; 16],
+    storage: Registers,
 }
 
 impl Cpu {
@@ -823,7 +823,7 @@ impl Cpu {
             vs: Registers([0; 16]),
             dt: 0,
             quirks,
-            storage: [0; 16],
+            storage: Registers([0; 16]),
         }
     }
 
@@ -1032,12 +1032,12 @@ impl Cpu {
             }
             SuperOpCode::Store(x) => {
                 for i in 0..=x {
-                    self.storage[i as usize] = self.vs[i];
+                    self.storage[i] = self.vs[i];
                 }
             }
             SuperOpCode::Load(x) => {
                 for i in 0..=x {
-                    self.vs[i] = self.storage[i as usize];
+                    self.vs[i] = self.storage[i];
                 }
             }
             SuperOpCode::Chip8(opcode) => return self.execute(peripheral, rng, opcode),
