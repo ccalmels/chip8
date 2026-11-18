@@ -277,12 +277,14 @@ impl Renderable for Chip8 {
     fn render(&self, pixels: &mut Pixels<'_>) {
         let (is_hi_res, planes) = self.screen();
         // We can resize every time because if it's equal it's a noop function
-        if is_hi_res {
-            pixels
-                .resize_buffer(Self::WIDTH * 2, Self::HEIGHT * 2)
-                .unwrap();
+        let (w, h) = if is_hi_res {
+            (Self::WIDTH * 2, Self::HEIGHT * 2)
         } else {
-            pixels.resize_buffer(Self::WIDTH, Self::HEIGHT).unwrap();
+            (Self::WIDTH, Self::HEIGHT)
+        };
+
+        if pixels.texture().size().width != w {
+            pixels.resize_buffer(w, h).unwrap();
         }
 
         let (chunks, _remainders) = pixels.frame_mut().as_chunks_mut::<4>();
