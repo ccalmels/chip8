@@ -2,7 +2,7 @@ use pixels::{Pixels, SurfaceTexture};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
-use winit::dpi::LogicalSize;
+use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::error::EventLoopError;
 use winit::event::{KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
@@ -80,6 +80,11 @@ impl<E: Renderable + Updatable + KeyListener> ApplicationHandler for App<E> {
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
+            }
+            WindowEvent::Resized(PhysicalSize { width, height }) => {
+                if let Some(pixels) = &mut self.pixels {
+                    pixels.resize_surface(width, height).unwrap();
+                }
             }
             WindowEvent::RedrawRequested => {
                 if let (Some(pixels), Some(window)) = (&mut self.pixels, &self.window) {
